@@ -63,8 +63,22 @@ def test():
     print(type(df2))
     print(df2)
 
+def check_val_count():
+    tuning_labels = pd.read_csv(settings.VAL_LABEL_FILE, names=['id', 'labels'], index_col=['id'])
+    df_counts = tuning_labels['labels'].str.split().apply(pd.Series).stack().value_counts()
+    total = df_counts.values.sum()
+    topn = df_counts.head(100).values.sum()
+    print(df_counts.shape, total, topn)
+
+def check_train_count():
+    labels = pd.read_csv(settings.TRAIN_LABEL_FILE)
+    df_counts = labels['LabelName'].str.split().apply(pd.Series).stack().value_counts()
+    total = df_counts.values.sum()
+    topn = df_counts.head(100).values.sum()
+    print(df_counts.shape, total, topn)
 
 if __name__ == '__main__':
     #generate_train_labels_from_human()
-    find_no_exist_train_files()
-    #test()
+    #find_no_exist_train_files()
+    #check_val_count()
+    check_train_count()

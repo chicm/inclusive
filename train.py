@@ -12,7 +12,7 @@ from loader import get_train_loader, get_val_loader
 import settings
 
 N_CLASSES = 7178
-batch_size = 64
+batch_size = 96
 epochs = 10
 
 def create_res50(load_weights=False):
@@ -67,7 +67,7 @@ def train(args):
             print('epoch {}: {}/{} batch loss: {:.4f}, avg loss: {:.4f} lr: {}'
                     .format(epoch, batch_size*(batch_idx+1), train_loader.num, loss.item(), train_loss/(batch_idx+1), current_lr), end='\r')
 
-            if iteration % 5000 == 0:
+            if iteration % 500 == 0:
                 val_loss = validate(model, criterion, val_loader)
                 model.train()
                 print('\nval loss: {:.4f}'.format(val_loss))
