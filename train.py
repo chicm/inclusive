@@ -40,6 +40,8 @@ def train(args):
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), weight_decay=0.0001, lr=args.lr)
 
+    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.6, patience=3, min_lr=5e-6)
+
     train_loader = get_train_loader(batch_size=batch_size)
     val_loader = get_val_loader(batch_size=batch_size)
     model.train()
@@ -47,6 +49,7 @@ def train(args):
     train_loss = 0
     iteration = 0
     best_val_loss = validate(model, criterion, val_loader)
+    lr_scheduler.step(best_iout)
     model.train()
 
     for epoch in range(epochs):
@@ -68,13 +71,15 @@ def train(args):
             print('epoch {}: {}/{} batch loss: {:.4f}, avg loss: {:.4f} lr: {}'
                     .format(epoch, batch_size*(batch_idx+1), train_loader.num, loss.item(), train_loss/(batch_idx+1), current_lr), end='\r')
 
-            if iteration % 500 == 0:
+            if iteration % 200 == 0:
                 val_loss = validate(model, criterion, val_loader)
                 model.train()
                 print('\nval loss: {:.4f}'.format(val_loss))
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
+                    print('saveing... {}'.format(model_file))
                     torch.save(model.state_dict(), model_file)
+                lr_scheduler.step(val_loss)
 
 def validate(model, criterion, val_loader):
     print('validating...')
