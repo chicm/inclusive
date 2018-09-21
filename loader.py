@@ -14,6 +14,8 @@ class ImageDataset(data.Dataset):
         self.img_dir = img_dir
         self.num = len(img_ids)
         self.transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
             transforms.Resize((224,224)),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -70,6 +72,7 @@ def get_train_loader(img_dir=settings.TRAIN_IMG_DIR, batch_size=8, dev_mode=Fals
 
     img_ids = meta['ImageID'].values.tolist()
     labels = meta['LabelName'].values.tolist()
+    print(len(img_ids))
     
     dset = ImageDataset(img_ids, img_dir, labels)
     dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn, drop_last=True)
@@ -83,6 +86,7 @@ def get_val_loader(img_dir=settings.VAL_IMG_DIR, batch_size=8, dev_mode=False, s
 
     img_ids = meta['ImageID'].values.tolist()
     labels = meta['LabelName'].values.tolist()
+    print(len(img_ids))
     
     dset = ImageDataset(img_ids, img_dir, labels)
     dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn)
@@ -96,6 +100,7 @@ def get_val2_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8, dev_mode=False,
 
     img_ids = meta['ImageID'].values.tolist()
     labels = meta['LabelName'].values.tolist()
+    print(len(img_ids))
     
     dset = ImageDataset(img_ids, img_dir, labels)
     dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn)

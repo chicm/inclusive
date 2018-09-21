@@ -30,4 +30,4 @@ submission.index.isin(tuning_labels.index).sum()
 submission['labels'] = predicted
 submission.update(tuning_labels)
 
-submission.to_csv('sub1_naive.csv')
+submission.to_csv('naive_3.csv')

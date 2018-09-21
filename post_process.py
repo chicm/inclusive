@@ -1,5 +1,9 @@
+import os
+import torch
+import torch.nn as nn
 import settings
 import pandas as pd
+from models import create_res50, create_res50_2
 
 def concat_sub(sub_file1, sub_file2, out_file):
     df1 = pd.read_csv(sub_file1)
@@ -16,5 +20,15 @@ def concat_sub(sub_file1, sub_file2, out_file):
     df3['labels'] = new_labels
     df3.to_csv(out_file, index=False)
 
+def convert_model():
+    res50 = create_res50()
+    res50.load_state_dict(torch.load(os.path.join(settings.MODEL_DIR, 'res50', 'best_lb029.pth')))
+    num_ftrs = res50.fc.in_features
+    res50.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, 100)) 
+
+    torch.save(res50.state_dict(), os.path.join(settings.MODEL_DIR, 'res50_2', 'best_lb029.pth'))
+
+
 if __name__ == '__main__':
-    concat_sub('sub1.csv', 'sub1_naive.csv', 'merged1.csv')
+    #concat_sub('sub1.csv', 'sub1_naive.csv', 'merged1.csv')
+    convert_model()

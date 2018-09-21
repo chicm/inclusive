@@ -23,3 +23,12 @@ def create_res50():
     #resnet = resnet.cuda()
     resnet.name = 'res50'
     return resnet
+
+def create_res50_2():
+    resnet = resnet50(pretrained=True)
+
+    num_ftrs = resnet.fc.in_features
+    resnet.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, N_CLASSES)) 
+    resnet.name = 'res50_2'
+    return resnet
+

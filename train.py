@@ -8,19 +8,17 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
 
-from torchvision.models import resnet34, resnet50
 from loader import get_train_loader, get_val_loader, get_val2_loader
 import settings
 from metrics import accuracy
-from models import create_res50
+from models import create_res50, create_res50_2
 
 N_CLASSES = 100
-batch_size = 64
 epochs = 10
 
 
 def train(args):
-    model = create_res50()
+    model = create_res50_2()
     model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
     parent_dir = os.path.dirname(model_file)
     if not os.path.exists(parent_dir):
@@ -36,15 +34,15 @@ def train(args):
 
     lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.6, patience=3, min_lr=5e-6)
 
-    train_loader = get_train_loader(batch_size=batch_size)
-    val_loader = get_val_loader(batch_size=batch_size)
-    val2_loader = get_val2_loader(batch_size=batch_size)
+    train_loader = get_train_loader(batch_size=args.batch_size)
+    val_loader = get_val_loader(batch_size=args.batch_size)
+    val2_loader = get_val2_loader(batch_size=args.batch_size)
     model.train()
 
     train_loss = 0
     iteration = 0
-    best_val_loss = validate(model, criterion, val_loader)
-    best_val_loss = validate(model, criterion, val2_loader)
+    best_val_loss = validate(model, criterion, val_loader, args.batch_size)
+    best_val_loss = validate(model, criterion, val2_loader, args.batch_size)
     lr_scheduler.step(best_val_loss)
     model.train()
 
@@ -65,21 +63,21 @@ def train(args):
 
             train_loss += loss.item()
             print('epoch {}: {}/{} batch loss: {:.4f}, avg loss: {:.4f} lr: {}'
-                    .format(epoch, batch_size*(batch_idx+1), train_loader.num, loss.item(), train_loss/(batch_idx+1), current_lr), end='\r')
+                    .format(epoch, args.batch_size*(batch_idx+1), train_loader.num, loss.item(), train_loss/(batch_idx+1), current_lr), end='\r')
 
             if iteration % 200 == 0:
-                val_loss = validate(model, criterion, val_loader)
-                val_loss = validate(model, criterion, val2_loader)
+                #val_loss = validate(model, criterion, val_loader, args.batch_size)
+                val_loss = validate(model, criterion, val2_loader, args.batch_size)
                 model.train()
-                print('\nval loss: {:.4f}'.format(val_loss))
+                #print('\nval loss: {:.4f}'.format(val_loss))
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     print('saveing... {}'.format(model_file))
                     torch.save(model.state_dict(), model_file)
                 lr_scheduler.step(val_loss)
 
-def validate(model, criterion, val_loader):
-    print('validating...')
+def validate(model, criterion, val_loader, batch_size):
+    print('\nvalidating...')
     model.eval()
     val_loss = 0
     targets = None
@@ -102,8 +100,7 @@ def validate(model, criterion, val_loader):
             
     val_loss = val_loss / (val_loader.num/batch_size)
     acc = accuracy(outputs, targets)
-    print('val acc:', acc)
-    
+    print('\nval acc:', acc)
     print('\nval loss: {:.4f}'.format(val_loss))
     return val_loss
 
@@ -117,7 +114,8 @@ def get_lrs(optimizer):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inclusive')
-    parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
+    parser.add_argument('--lr', default=0.0001, type=float, help='learning rate')
+    parser.add_argument('--batch_size', default=96, type=int, help='batch size')
     args = parser.parse_args()
 
     log.basicConfig(

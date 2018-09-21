@@ -114,10 +114,11 @@ def generate_val2_label():
     filtered_df.to_csv(settings.VAL2_LABEL_FILE, header=None, index=False)
 
 if __name__ == '__main__':
-    #generate_train_labels_from_human(get_classes(settings.TOP100_VAL_CLASS_FILE), settings.TRAIN_LABEL_FILE)
-    generate_val2_label()
-    #find_no_exist_train_files()
     #check_val_count()
+    #generate_val2_label()
+    generate_train_labels_from_human(get_classes(settings.TOP100_VAL_CLASS_FILE), settings.TRAIN_LABEL_FILE)
+    #find_no_exist_train_files()
+    
     #check_train_count()
     #check_class_intersection()
     #generate_topk_class()

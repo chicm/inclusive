@@ -13,7 +13,7 @@ def accuracy(logits, target):
         pred = (torch.sigmoid(logits) > t).byte()
         corrects = (pred.eq(target) * target).sum().item()
         incorrects = (pred.ne(target) * (target.eq(0))).sum().item()
-        results.append((corrects, incorrects, corrects/(incorrects+1), t))
+        results.append((corrects, incorrects, round(corrects/(incorrects+1),3), t))
     return results
 
 def topk_accuracy(output, label, topk=(1,100)):
