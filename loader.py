@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.utils.data as data
 from torchvision import datasets, models, transforms
-from utils import get_class_stoi, get_train_meta, get_val_meta, get_classes, get_test_ids
+from utils import get_class_stoi, get_train_meta, get_val_meta, get_classes, get_test_ids, get_val2_ids, get_val2_meta
 from PIL import Image
 import settings
 
@@ -89,6 +89,19 @@ def get_val_loader(img_dir=settings.VAL_IMG_DIR, batch_size=8, dev_mode=False, s
     dloader.num = dset.num
     return dloader
 
+def get_val2_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8, dev_mode=False, shuffle=False):
+    meta = get_val2_meta()
+    if dev_mode:
+        meta = meta.iloc[:10]
+
+    img_ids = meta['ImageID'].values.tolist()
+    labels = meta['LabelName'].values.tolist()
+    
+    dset = ImageDataset(img_ids, img_dir, labels)
+    dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn)
+    dloader.num = dset.num
+    return dloader
+
 def get_test_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8):
     img_ids = get_test_ids()
     
@@ -113,8 +126,17 @@ def test_test_loader():
             print(imgs)
             break
 
+def test_val2_loader():
+    loader = get_val2_loader(dev_mode=True)
+    for i, data in enumerate(loader):
+        imgs, targets = data
+        print(targets)
+        print(imgs.size(), targets.size())
+
+
 if __name__ == '__main__':
-    test_test_loader()
+    #test_test_loader()
+    test_val2_loader()
     #test_train_loader()
     #small_dict, img_ids = load_small_train_ids()
     #print(img_ids[:10])

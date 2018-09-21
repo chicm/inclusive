@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
 
 from torchvision.models import resnet34, resnet50
-from loader import get_train_loader, get_val_loader
+from loader import get_train_loader, get_val_loader, get_val2_loader
 import settings
 from metrics import accuracy
 from models import create_res50
@@ -38,11 +38,13 @@ def train(args):
 
     train_loader = get_train_loader(batch_size=batch_size)
     val_loader = get_val_loader(batch_size=batch_size)
+    val2_loader = get_val2_loader(batch_size=batch_size)
     model.train()
 
     train_loss = 0
     iteration = 0
     best_val_loss = validate(model, criterion, val_loader)
+    best_val_loss = validate(model, criterion, val2_loader)
     lr_scheduler.step(best_val_loss)
     model.train()
 
@@ -67,6 +69,7 @@ def train(args):
 
             if iteration % 200 == 0:
                 val_loss = validate(model, criterion, val_loader)
+                val_loss = validate(model, criterion, val2_loader)
                 model.train()
                 print('\nval loss: {:.4f}'.format(val_loss))
                 if val_loss < best_val_loss:

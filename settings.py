@@ -21,6 +21,7 @@ HUMAN_TRAIN_LABEL_FILE = os.path.join(DATA_DIR, 'train_human_labels.csv')
 
 
 VAL_LABEL_FILE = os.path.join(DATA_DIR, 'tuning_labels.csv')
+VAL2_LABEL_FILE = os.path.join(DATA_DIR, 'tuning_labels_100.csv')
 STAGE1_SAMPLE_SUB = os.path.join(DATA_DIR, 'stage_1_sample_submission.csv')
 
 TOP100_VAL_CLASS_FILE = os.path.join(DATA_DIR, 'top100_val.csv')

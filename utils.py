@@ -22,16 +22,19 @@ def get_test_ids():
     print(len(ids))
     return ids
 
-def get_val_ids_old():
-    val_df = pd.read_csv(settings.VAL_LABEL_FILE, names=['ImageID', 'LabelName'])
+def get_val2_ids():
+    val_df = pd.read_csv(settings.VAL2_LABEL_FILE, names=['ImageID', 'LabelName'])
     print(val_df.shape)
     print(val_df.values[:5])
     ids = val_df['ImageID'].values.tolist()
     print(len(ids))
     return ids
 
-def get_val_meta_old():
-    return pd.read_csv(settings.VAL_LABEL_FILE, names=['ImageID', 'LabelName'])
+def get_val2_meta():
+    meta = pd.read_csv(settings.VAL2_LABEL_FILE, names=['ImageID', 'LabelName'])
+    print(meta.shape)
+    print(meta.head(5))
+    return meta
 
 def get_classes(class_file_name):
     classes = pd.read_csv(class_file_name)['label_code'].values.tolist()
@@ -50,5 +53,6 @@ if __name__ == '__main__':
     #get_train_ids()
     #get_val_ids()
     #get_class_converter()
-    get_test_ids()
+    #get_test_ids()
     #pass
+    print(get_val_meta().head(5))

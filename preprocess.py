@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from utils import get_classes
+from utils import get_classes, get_val2_meta
 import settings
 
 bad_ids = ['a251467db63ddc0c', 'a254fdb8377c32ac', 'a256e3fc24eb2692']
@@ -100,9 +100,22 @@ def generate_topk_class():
     df3 = pd.DataFrame(list(u), columns=['label_code'])
     df3.to_csv(settings.TOP272_CLASS_FILE, index=False)
 
+def generate_val2_label():
+    classes = get_classes(settings.CLASSES_FILE)
+    val2_meta = pd.read_csv(os.path.join(settings.DATA_DIR,'tuning_labels.csv'), names=['ImageID', 'LabelName'])
+    img_ids = []
+    labels = []
+    for row in val2_meta.values:
+        filtered_label = [x for x in row[1].split() if x in classes]
+        if len(filtered_label) > 0:
+            img_ids.append(row[0])
+            labels.append(' '.join(filtered_label))
+    filtered_df = pd.DataFrame({'image_id': img_ids, 'labels': labels})
+    filtered_df.to_csv(settings.VAL2_LABEL_FILE, header=None, index=False)
+
 if __name__ == '__main__':
-    #generate_train_labels_from_human()
-    generate_train_labels_from_human(get_classes(settings.TOP100_VAL_CLASS_FILE), settings.TRAIN_LABEL_FILE)
+    #generate_train_labels_from_human(get_classes(settings.TOP100_VAL_CLASS_FILE), settings.TRAIN_LABEL_FILE)
+    generate_val2_label()
     #find_no_exist_train_files()
     #check_val_count()
     #check_train_count()
