@@ -7,19 +7,25 @@ from utils import get_class_stoi, get_train_meta, get_val_meta, get_classes, get
 from PIL import Image
 import settings
 
-class ImageDataset(data.Dataset):
-    def __init__(self, img_ids, img_dir, label_names=None):
-        self.input_size = settings.IMG_SZ
-        self.img_ids = img_ids
-        self.img_dir = img_dir
-        self.num = len(img_ids)
-        self.transform = transforms.Compose([
+train_transforms = transforms.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+test_transforms = transforms.Compose([
             transforms.Resize((224,224)),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
+
+class ImageDataset(data.Dataset):
+    def __init__(self, train_mode, img_ids, img_dir, label_names=None):
+        self.input_size = settings.IMG_SZ
+        self.train_mode = train_mode
+        self.img_ids = img_ids
+        self.img_dir = img_dir
+        self.num = len(img_ids)
         self.label_names = label_names
         self.classes = get_classes(settings.CLASSES_FILE)
         self.stoi = get_class_stoi(self.classes)
@@ -29,7 +35,11 @@ class ImageDataset(data.Dataset):
         #img = cv2.imread(fn)
         img = Image.open(fn, 'r')
         img = img.convert('RGB')
-        img = self.transform(img)
+        
+        if self.train_mode:
+            img = train_transforms(img)
+        else:
+            img = test_transforms(img)
 
         if self.label_names is not None:
             return img, self.label_names[index]
@@ -74,7 +84,7 @@ def get_train_loader(img_dir=settings.TRAIN_IMG_DIR, batch_size=8, dev_mode=Fals
     labels = meta['LabelName'].values.tolist()
     print(len(img_ids))
     
-    dset = ImageDataset(img_ids, img_dir, labels)
+    dset = ImageDataset(True, img_ids, img_dir, labels)
     dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn, drop_last=True)
     dloader.num = dset.num
     return dloader
@@ -88,7 +98,7 @@ def get_val_loader(img_dir=settings.VAL_IMG_DIR, batch_size=8, dev_mode=False, s
     labels = meta['LabelName'].values.tolist()
     print(len(img_ids))
     
-    dset = ImageDataset(img_ids, img_dir, labels)
+    dset = ImageDataset(False, img_ids, img_dir, labels)
     dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn)
     dloader.num = dset.num
     return dloader
@@ -102,7 +112,7 @@ def get_val2_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8, dev_mode=False,
     labels = meta['LabelName'].values.tolist()
     print(len(img_ids))
     
-    dset = ImageDataset(img_ids, img_dir, labels)
+    dset = ImageDataset(False, img_ids, img_dir, labels)
     dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn)
     dloader.num = dset.num
     return dloader
@@ -110,7 +120,7 @@ def get_val2_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8, dev_mode=False,
 def get_test_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8):
     img_ids = get_test_ids()
     
-    dset = ImageDataset(img_ids, img_dir)
+    dset = ImageDataset(False, img_ids, img_dir)
     dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=dset.collate_fn, drop_last=False)
     dloader.num = dset.num
     return dloader
@@ -140,8 +150,8 @@ def test_val2_loader():
 
 
 if __name__ == '__main__':
-    #test_test_loader()
+    test_test_loader()
     test_val2_loader()
-    #test_train_loader()
+    test_train_loader()
     #small_dict, img_ids = load_small_train_ids()
     #print(img_ids[:10])
