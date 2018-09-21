@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.utils.data as data
 from torchvision import datasets, models, transforms
-from utils import get_class_converter, get_train_meta, get_val_meta
+from utils import get_class_stoi, get_train_meta, get_val_meta, get_classes
 from PIL import Image
 import settings
 
@@ -19,7 +19,8 @@ class ImageDataset(data.Dataset):
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
         self.label_names = label_names
-        self.classes, self.stoi = get_class_converter()
+        self.classes = get_classes(settings.CLASSES_FILE)
+        self.stoi = get_class_stoi(self.classes)
 
     def __getitem__(self, index):
         fn = os.path.join(self.img_dir, '{}.jpg'.format(self.img_ids[index]))

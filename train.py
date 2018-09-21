@@ -10,9 +10,10 @@ import torch.optim as optim
 from torchvision.models import resnet34, resnet50
 from loader import get_train_loader, get_val_loader
 import settings
+from metrics import accuracy
 
-N_CLASSES = 7178
-batch_size = 96
+N_CLASSES = 100
+batch_size = 64
 epochs = 10
 
 def create_res50(load_weights=False):
@@ -79,12 +80,16 @@ def validate(model, criterion, val_loader):
     print('validating...')
     model.eval()
     val_loss = 0
+    targets = None
+    outputs = None
     with torch.no_grad():
         for x, target in val_loader:
             x, target = x.cuda(), target.cuda()
             output = model(x)
             loss = criterion(output, target)
             val_loss += loss.item()
+            #acc = accuracy(output, target)
+            #print('val acc:', acc)
     val_loss = val_loss / (val_loader.num/batch_size)
     print('\nval loss: {:.4f}'.format(val_loss))
     return val_loss
@@ -99,7 +104,7 @@ def get_lrs(optimizer):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inclusive')
-    parser.add_argument('--lr', default=0.0001, type=float, help='learning rate')
+    parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
     args = parser.parse_args()
 
     log.basicConfig(

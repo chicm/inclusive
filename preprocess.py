@@ -5,9 +5,9 @@ import settings
 
 bad_ids = ['a251467db63ddc0c', 'a254fdb8377c32ac', 'a256e3fc24eb2692']
 
-def generate_train_labels_from_human():
+def generate_train_labels_from_human(classes, output_file):
     human_labels = pd.read_csv(settings.HUMAN_TRAIN_LABEL_FILE)
-    classes = get_classes()
+    #classes = get_classes()
     print(human_labels.shape)
     print(human_labels.LabelName.unique().shape)
     human_labels = human_labels[human_labels['LabelName'].isin(classes)]
@@ -21,7 +21,9 @@ def generate_train_labels_from_human():
     df = human_labels.groupby('ImageID')['LabelName'].apply(' '.join).reset_index()
     print(df.head())
     print(df.shape)
-    df.to_csv(settings.TRAIN_LABEL_FILE, index=False)
+    df = df[~df['ImageID'].isin(bad_ids)]
+    print(df.shape)
+    df.to_csv(output_file, index=False)
     #print(df2[df2['E'].isin(['two','four'])])
 
 def find_no_exist_train_files():
@@ -70,15 +72,39 @@ def check_val_count():
     topn = df_counts.head(100).values.sum()
     print(df_counts.shape, total, topn)
 
+    classes = tuning_labels['labels'].str.split().apply(pd.Series).stack().value_counts().head(100).index.tolist()
+    print(classes[:10])
+    df2 = pd.DataFrame(classes, columns=['label_code'])
+    df2.to_csv(settings.TOP100_VAL_CLASS_FILE, index=False)
+
 def check_train_count():
     labels = pd.read_csv(settings.TRAIN_LABEL_FILE)
-    df_counts = labels['LabelName'].str.split().apply(pd.Series).stack().value_counts()
-    total = df_counts.values.sum()
-    topn = df_counts.head(100).values.sum()
-    print(df_counts.shape, total, topn)
+    classes = labels['LabelName'].str.split().apply(pd.Series).stack().value_counts().head(200).index.tolist()
+    df2 = pd.DataFrame(classes, columns=['label_code'])
+    df2.to_csv(settings.TOP200_TRAIN_CLASS_FILE, index=False)
+    #total = df_counts.values.sum()
+    #topn = df_counts.head(200).values.sum()
+    #print(df_counts.shape, total, topn)
+
+def check_class_intersection():
+    df1 = pd.read_csv(settings.TOP100_VAL_CLASS_FILE)
+    df2 = pd.read_csv(settings.TOP200_TRAIN_CLASS_FILE)
+    common = set(df1['label_code'].values.tolist()) & set(df2['label_code'].values.tolist())
+    print(list(common)[:10])
+    print(len(common))
+
+def generate_topk_class():
+    df1 = pd.read_csv(settings.TOP100_VAL_CLASS_FILE)
+    df2 = pd.read_csv(settings.TOP200_TRAIN_CLASS_FILE)
+    u = set(df1['label_code'].values.tolist()) | set(df2['label_code'].values.tolist())
+    df3 = pd.DataFrame(list(u), columns=['label_code'])
+    df3.to_csv(settings.TOP272_CLASS_FILE, index=False)
 
 if __name__ == '__main__':
     #generate_train_labels_from_human()
+    generate_train_labels_from_human(get_classes(settings.TOP100_VAL_CLASS_FILE), settings.TRAIN_LABEL_FILE)
     #find_no_exist_train_files()
     #check_val_count()
-    check_train_count()
+    #check_train_count()
+    #check_class_intersection()
+    #generate_topk_class()
