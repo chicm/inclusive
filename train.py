@@ -30,7 +30,7 @@ def train(args):
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), weight_decay=0.0001, lr=args.lr)
 
-    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.6, patience=3, min_lr=5e-6)
+    lr_scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.8, patience=8, min_lr=5e-6)
 
     train_loader = get_train_loader(batch_size=args.batch_size)
     val_loader = get_val_loader(batch_size=args.batch_size)
