@@ -101,9 +101,10 @@ def validate(model, criterion, val_loader, batch_size):
     val_loss = val_loss / (val_loader.num/batch_size)
     acc = accuracy(outputs, targets)
     print('val acc:', acc)
-    print('val loss: {:.4f}, 0.1 acc: {}'.format(val_loss, acc[1][2]))
+    acc_sum = sum([acc[i][2] for i in range(1,6)])
+    print('val loss: {:.4f}, threshold acc: {:.4f}'.format(val_loss, acc_sum))
     log.info(str(acc))
-    return val_loss, acc[1][2]
+    return val_loss, round(acc_sum,4)
 
        
 def get_lrs(optimizer):
