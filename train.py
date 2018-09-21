@@ -14,8 +14,6 @@ from metrics import accuracy
 from models import create_res50, create_res50_2
 
 N_CLASSES = 100
-epochs = 10
-
 
 def train(args):
     model = create_res50_2()
@@ -46,11 +44,9 @@ def train(args):
     lr_scheduler.step(best_val_loss)
     model.train()
 
-    for epoch in range(epochs):
-        current_lr = get_lrs(optimizer) 
-        print('lr:', current_lr)
-        bg = time.time()
-
+    bg = time.time()
+    current_lr = get_lrs(optimizer) 
+    for epoch in range(args.epochs):
         for batch_idx, data in enumerate(train_loader):
             iteration += 1
             x, target = data
@@ -62,8 +58,9 @@ def train(args):
             optimizer.step()
 
             train_loss += loss.item()
-            print('epoch {}: {}/{} batch loss: {:.4f}, avg loss: {:.4f} lr: {}'
-                    .format(epoch, args.batch_size*(batch_idx+1), train_loader.num, loss.item(), train_loss/(batch_idx+1), current_lr), end='\r')
+            print('epoch {}: {}/{} batch loss: {:.4f}, avg loss: {:.4f} lr: {}, {:.1f} min'
+                    .format(epoch, args.batch_size*(batch_idx+1), train_loader.num,
+                    loss.item(), train_loss/(batch_idx+1), current_lr, (time.time() - bg) / 60), end='\r')
 
             if iteration % 200 == 0:
                 #val_loss = validate(model, criterion, val_loader, args.batch_size)
@@ -75,6 +72,8 @@ def train(args):
                     print('saveing... {}'.format(model_file))
                     torch.save(model.state_dict(), model_file)
                 lr_scheduler.step(val_loss)
+                current_lr = get_lrs(optimizer) 
+                print('lr:', current_lr)
 
 def validate(model, criterion, val_loader, batch_size):
     print('\nvalidating...')
@@ -102,6 +101,7 @@ def validate(model, criterion, val_loader, batch_size):
     acc = accuracy(outputs, targets)
     print('\nval acc:', acc)
     print('\nval loss: {:.4f}'.format(val_loss))
+    log.info(str(acc))
     return val_loss
 
        
@@ -116,6 +116,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inclusive')
     parser.add_argument('--lr', default=0.0001, type=float, help='learning rate')
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
+    parser.add_argument('--epochs', default=50, type=int, help='epochs')
     args = parser.parse_args()
 
     log.basicConfig(
