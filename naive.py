@@ -19,7 +19,7 @@ predicted = ' '.join(
     .tolist()
 )
 
-print(f'{top_n} most popular labels are: {predicted}')
+print('{} most popular labels are: {}'.format(top_n, predicted))
 
 submission = pd.read_csv(settings.STAGE1_SAMPLE_SUB, index_col='image_id')
 
