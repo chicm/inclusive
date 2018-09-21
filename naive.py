@@ -2,7 +2,7 @@ import pandas as pd
 
 import settings
 
-top_n = 4
+top_n = 3
 
 tuning_labels = pd.read_csv(settings.VAL_LABEL_FILE, names=['id', 'labels'], index_col=['id'])
 
@@ -30,4 +30,4 @@ submission.index.isin(tuning_labels.index).sum()
 submission['labels'] = predicted
 submission.update(tuning_labels)
 
-submission.to_csv('sub1.csv')
+submission.to_csv('sub1_naive.csv')
