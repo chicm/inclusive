@@ -16,6 +16,12 @@ def get_val_ids():
 def get_val_meta():
     return get_train_meta().iloc[1350000:1355000]
 
+def get_test_ids():
+    test_df = pd.read_csv(settings.STAGE1_SAMPLE_SUB)
+    ids = test_df['image_id'].values.tolist()
+    print(len(ids))
+    return ids
+
 def get_val_ids_old():
     val_df = pd.read_csv(settings.VAL_LABEL_FILE, names=['ImageID', 'LabelName'])
     print(val_df.shape)
@@ -44,4 +50,5 @@ if __name__ == '__main__':
     #get_train_ids()
     #get_val_ids()
     #get_class_converter()
-    pass
+    get_test_ids()
+    #pass

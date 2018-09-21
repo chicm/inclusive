@@ -6,24 +6,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
 
 from torchvision.models import resnet34, resnet50
 from loader import get_train_loader, get_val_loader
 import settings
 from metrics import accuracy
+from models import create_res50
 
 N_CLASSES = 100
 batch_size = 64
 epochs = 10
 
-def create_res50(load_weights=False):
-    resnet = resnet50(pretrained=True)
-
-    num_ftrs = resnet.fc.in_features
-    resnet.fc = nn.Linear(num_ftrs, N_CLASSES)
-    #resnet = resnet.cuda()
-    resnet.name = 'res50'
-    return resnet
 
 def train(args):
     model = create_res50()
@@ -49,7 +43,7 @@ def train(args):
     train_loss = 0
     iteration = 0
     best_val_loss = validate(model, criterion, val_loader)
-    lr_scheduler.step(best_iout)
+    lr_scheduler.step(best_val_loss)
     model.train()
 
     for epoch in range(epochs):
@@ -91,11 +85,22 @@ def validate(model, criterion, val_loader):
         for x, target in val_loader:
             x, target = x.cuda(), target.cuda()
             output = model(x)
+            if targets is None:
+                targets = target
+            else:
+                targets = torch.cat([targets, target])
+            if outputs is None:
+                outputs = output
+            else:
+                outputs = torch.cat([outputs, output])    
             loss = criterion(output, target)
             val_loss += loss.item()
             #acc = accuracy(output, target)
-            #print('val acc:', acc)
+            
     val_loss = val_loss / (val_loader.num/batch_size)
+    acc = accuracy(outputs, targets)
+    print('val acc:', acc)
+    
     print('\nval loss: {:.4f}'.format(val_loss))
     return val_loss
 
