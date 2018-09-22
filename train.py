@@ -11,12 +11,13 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLRO
 from loader import get_train_loader, get_val_loader, get_val2_loader
 import settings
 from metrics import accuracy
-from models import create_res50, create_res50_2
+from models import create_res50, create_res50_2, AttentionResNet
 
 N_CLASSES = 100
 
 def train(args):
-    model = create_res50_2()
+    #model = create_res50_2()
+    model = AttentionResNet(34)
     model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
     parent_dir = os.path.dirname(model_file)
     if not os.path.exists(parent_dir):
@@ -30,7 +31,7 @@ def train(args):
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), weight_decay=0.0001, lr=args.lr)
 
-    lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.8, patience=8, min_lr=5e-6)
+    lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.8, patience=8, min_lr=1e-5)
 
     train_loader = get_train_loader(batch_size=args.batch_size)
     val_loader = get_val_loader(batch_size=args.batch_size)
