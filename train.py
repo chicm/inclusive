@@ -10,7 +10,7 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLRO
 
 from loader import get_train_loader, get_val_loader, get_val2_loader
 import settings
-from metrics import accuracy
+from metrics import accuracy, f2_scores
 from models import create_res50, create_res50_2, AttentionResNet
 
 N_CLASSES = 100
@@ -100,12 +100,18 @@ def validate(model, criterion, val_loader, batch_size):
             val_loss += loss.item()
             
     val_loss = val_loss / (val_loader.num/batch_size)
+
     acc = accuracy(outputs, targets)
-    print('val acc:', acc)
+    print('acc:', acc)
     acc_sum = sum([acc[i][2] for i in range(1,7)])
-    print('val loss: {:.4f}, threshold acc: {:.4f}'.format(val_loss, acc_sum))
-    log.info(str(acc))
-    return val_loss, round(acc_sum,4)
+
+    score = f2_scores(outputs, targets)
+    print('f2 scores:', score)
+    score_sum = sum([score[i][1] for i in range(1,7)])
+    print('val loss: {:.4f}, threshold f2 score: {:.4f}, threshold acc: {:.4f}'
+        .format(val_loss, score_sum, acc_sum))
+    log.info(str(score))
+    return val_loss, round(score_sum,4)
 
        
 def get_lrs(optimizer):
