@@ -17,7 +17,7 @@ N_CLASSES = 100
 
 def train(args):
     #model = create_res50_2()
-    model = AttentionResNet(34)
+    model = AttentionResNet(args.layers)
     model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
     parent_dir = os.path.dirname(model_file)
     if not os.path.exists(parent_dir):
@@ -31,7 +31,7 @@ def train(args):
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), weight_decay=0.0001, lr=args.lr)
 
-    lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.8, patience=8, min_lr=1e-5)
+    lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.8, patience=6, min_lr=2e-6)
 
     train_loader = get_train_loader(batch_size=args.batch_size)
     val_loader = get_val_loader(batch_size=args.batch_size)
@@ -125,6 +125,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inclusive')
     parser.add_argument('--lr', default=0.0001, type=float, help='learning rate')
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
+    parser.add_argument('--layers', default=50, type=int, help='batch size')
     parser.add_argument('--epochs', default=50, type=int, help='epochs')
     args = parser.parse_args()
 
