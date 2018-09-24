@@ -119,8 +119,11 @@ def get_val2_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8, dev_mode=False,
     dloader.num = dset.num
     return dloader
 
-def get_test_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8):
+def get_test_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8, dev_mode=False):
     img_ids = get_test_ids()
+
+    if dev_mode:
+        img_ids = img_ids[:10]
     
     dset = ImageDataset(False, img_ids, img_dir)
     dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=dset.collate_fn, drop_last=False)
