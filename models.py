@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
 
-from torchvision.models import resnet34, resnet50, resnet101, resnet152
+from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
 import net.resnet
 from loader import get_train_loader, get_val_loader
 import settings
@@ -36,6 +36,8 @@ def create_pretrained_resnet(layers):
     print('create_pretrained_resnet', layers)
     if layers == 34:
         model, bottom_channels = resnet34(pretrained=True), 512
+    elif layers == 18:
+        model, bottom_channels = resnet18(pretrained=True), 512
     elif layers == 50:
         model, bottom_channels = resnet50(pretrained=True), 2048
     elif layers == 101:
