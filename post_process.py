@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import settings
 import pandas as pd
-from models import create_res50, create_res50_2
+from models import create_resnet_model
 
 def concat_sub(sub_file1, sub_file2, out_file):
     df1 = pd.read_csv(sub_file1)
@@ -21,7 +21,7 @@ def concat_sub(sub_file1, sub_file2, out_file):
     df3.to_csv(out_file, index=False)
 
 def convert_model():
-    res50 = create_res50()
+    res50 = create_resnet_model(50)
     res50.load_state_dict(torch.load(os.path.join(settings.MODEL_DIR, 'res50', 'best_lb029.pth')))
     num_ftrs = res50.fc.in_features
     res50.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, 100)) 

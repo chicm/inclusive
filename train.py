@@ -11,13 +11,12 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLRO
 from loader import get_train_loader, get_val_loader, get_val2_loader
 import settings
 from metrics import accuracy, f2_scores
-from models import create_resnet_model, AttentionResNet
+from models import create_model, AttentionResNet
 
 N_CLASSES = 100
 
 def train(args):
-    #model = create_res50_2()
-    model = create_resnet_model(args.layers)
+    model = create_model('resnet', args.layers, pretrained=args.pretrained)
     model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
     parent_dir = os.path.dirname(model_file)
     if not os.path.exists(parent_dir):
@@ -127,6 +126,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
     parser.add_argument('--layers', default=50, type=int, help='batch size')
     parser.add_argument('--epochs', default=50, type=int, help='epochs')
+    parser.add_argument('--pretrained',action='store_true', help='pretrained')
     args = parser.parse_args()
 
     log.basicConfig(

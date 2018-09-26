@@ -9,29 +9,47 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
 
 from torchvision.models import resnet34, resnet50, resnet101, resnet152
+import net.resnet
 from loader import get_train_loader, get_val_loader
 import settings
 from metrics import accuracy
 
 N_CLASSES = 100
 
-def create_res50():
-    resnet = resnet50(pretrained=True)
+def create_model(model_name, layers, pretrained):
+    if model_name == 'resnet' and pretrained:
+        model, _ = create_pretrained_resnet(layers)
+        model.name = 'resnet'+str(layers)
+    elif model_name == 'resnet' and not pretrained:
+        model = create_resnet_model(layers)
+        model.name = 'resnet_scratch_'+str(layers)
 
-    num_ftrs = resnet.fc.in_features
-    resnet.fc = nn.Linear(num_ftrs, N_CLASSES)
-    #resnet = resnet.cuda()
-    resnet.name = 'res50'
-    return resnet
+    return model
 
 def create_resnet_model(layers):
-    resnet, _ = create_resnet(layers)
+    if layers not in [18, 32, 34, 50, 101, 152]:
+        raise ValueError('Wrong resnet layers')
 
-    num_ftrs = resnet.fc.in_features
-    resnet.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, N_CLASSES)) 
-    resnet.name = 'resnet'+str(layers)
-    return resnet
+    return eval('net.resnet.resnet'+str(layers))(pretrained=False, num_classes=N_CLASSES)
+    
+def create_pretrained_resnet(layers):
+    print('create_pretrained_resnet', layers)
+    if layers == 34:
+        model, bottom_channels = resnet34(pretrained=True), 512
+    elif layers == 50:
+        model, bottom_channels = resnet50(pretrained=True), 2048
+    elif layers == 101:
+        model, bottom_channels = resnet101(pretrained=True), 2048
+    elif layers == 152:
+        model, bottom_channels = resnet152(pretrained=True), 2048
+    else:
+        raise NotImplementedError('only 34, 50, 101, 152 version of Resnet are implemented')
 
+    num_ftrs = model.fc.in_features
+    model.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, N_CLASSES)) 
+    model.name = 'resnet'+str(layers)
+
+    return model, bottom_channels
 
 class ConvBn2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=(3,3), stride=(1,1), padding=(1,1)):
@@ -89,19 +107,6 @@ class EncoderBlock(nn.Module):
 
         return x*g1 + x*g2
 
-
-def create_resnet(layers):
-    if layers == 34:
-        return resnet34(pretrained=True), 512
-    elif layers == 50:
-        return resnet50(pretrained=True), 2048
-    elif layers == 101:
-        return resnet101(pretrained=True), 2048
-    elif layers == 152:
-        return resnet152(pretrained=True), 2048
-    else:
-        raise NotImplementedError('only 34, 50, 101, 152 version of Resnet are implemented')
-
 class AttentionResNet(nn.Module):
     def __init__(self, encoder_depth, num_classes=100, num_filters=32, dropout_2d=0.4,
                  pretrained=True, is_deconv=True):
@@ -110,7 +115,7 @@ class AttentionResNet(nn.Module):
         self.num_classes = num_classes
         self.dropout_2d = dropout_2d
 
-        self.resnet, bottom_channel_nr = create_resnet(encoder_depth)
+        self.resnet, bottom_channel_nr = create_pretrained_resnet(encoder_depth)
 
         self.encoder1 = EncoderBlock(
             nn.Sequential(self.resnet.conv1, self.resnet.bn1, self.resnet.relu),
@@ -154,6 +159,12 @@ def test():
     print(out.size()) #, cls_taret.size())
     #print(out)
 
+def test2():
+    model = create_model('resnet', 32, pretrained=False).cuda()
+    x = torch.randn(2,3,128,128).cuda()
+    y = model(x)
+    print(y.size())
 
 if __name__ == '__main__':
-    test()
+    #test()
+    test2()

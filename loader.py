@@ -13,7 +13,8 @@ train_transforms = transforms.Compose([
             transforms.RandomHorizontalFlip(),
             #transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
             transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) imagenet mean and std
+            transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890]) # open images mean and std
         ])
 test_transforms = transforms.Compose([
             transforms.Resize((224,224)),
