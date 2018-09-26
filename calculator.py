@@ -9,6 +9,13 @@ from PIL import Image
 
 import settings
 
+'''
+Result for image size 256x256:
+torch.Size([3, 256, 256])
+mean: tensor([ 0.4557,  0.4310,  0.3968], device='cuda:0')
+torch.Size([3, 256, 256])
+std: tensor([ 0.2833,  0.2771,  0.2890], device='cuda:0')
+'''
 
 class TrainDataset(data.Dataset):
     def __init__(self, img_dir, img_sz):
@@ -30,7 +37,7 @@ class TrainDataset(data.Dataset):
 def calculate_mean(args):
     dset = TrainDataset(settings.TRAIN_IMG_DIR, args.img_sz)
     print(len(dset))
-    dloader = data.DataLoader(dset, batch_size=args.batch_size, shuffle=False, num_workers=4, drop_last=True)
+    dloader = data.DataLoader(dset, batch_size=args.batch_size, shuffle=False, num_workers=6, drop_last=True)
     img_sum = None
     for i, img in enumerate(dloader):
         if args.n_batches > 0 and i >= args.n_batches:
@@ -40,9 +47,7 @@ def calculate_mean(args):
             img_sum = img
         else:
             img_sum += img
-
-        if i % 100 == 0:
-            print('.', end='')
+        print('{} / {}'.format(args.batch_size * (i+1), len(dset)), end='\r')
     print('')
     print(img_sum.size())
     img_sum = torch.sum(img_sum, 0)
@@ -68,14 +73,13 @@ def calculate_std(args, rgb_mean):
 
     dset = TrainDataset(settings.TRAIN_IMG_DIR, args.img_sz)
     print(len(dset))
-    dloader = data.DataLoader(dset, batch_size=args.batch_size, shuffle=False, num_workers=4, drop_last=True)
+    dloader = data.DataLoader(dset, batch_size=args.batch_size, shuffle=False, num_workers=6, drop_last=True)
     std_sum = None
     for i, img in enumerate(dloader):
         if args.n_batches > 0 and i >= args.n_batches:
             break
         img = img.cuda()
-        if i % 100 == 0:
-            print('.', end='')
+        print('{} / {}'.format(args.batch_size * (i+1), len(dset)),end='\r')
         if std_sum is None:
             std_sum = (img - rgb_mean) * (img - rgb_mean)
         else:
