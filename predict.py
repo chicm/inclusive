@@ -2,12 +2,12 @@ import os
 import torch
 import pandas as pd
 import settings
-from models import create_res50, create_resnet_model
+from models import create_model
 from loader import get_test_loader
 from utils import get_classes
 
-threshold = 0.15
-batch_size = 128
+threshold = 0.13
+batch_size = 512 #128
 
 classes = get_classes(settings.CLASSES_FILE)
 
@@ -21,7 +21,7 @@ def get_label_names(row):
 def create_submission(predictions):
     meta = pd.read_csv(settings.STAGE1_SAMPLE_SUB)
     meta['labels'] = predictions
-    meta.to_csv('sub1.csv', index=False)
+    meta.to_csv('ensemble_res18_34_50_013_1.csv', index=False)
 
 def model_predict(model):
     model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
@@ -48,7 +48,7 @@ def model_predict(model):
     return outputs
 
 def predict():
-    model = create_resnet_model(50)
+    model = create_model('resnet', 18, pretrained=True)
     outputs = model_predict(model)
 
     label_names = []
@@ -62,8 +62,8 @@ def predict():
 
 def ensemble():
     outputs = []
-    for layer in [34, 50]:
-        model = create_resnet_model(layer)
+    for layer in [18, 34, 50]:
+        model = create_model('resnet', layer, pretrained=True)
         output = model_predict(model)
         outputs.append(output)
     mean_output = torch.mean(torch.stack(outputs), 0)
