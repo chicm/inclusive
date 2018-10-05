@@ -13,8 +13,6 @@ import settings
 from metrics import accuracy, f2_scores
 from models import create_model, AttentionResNet
 
-N_CLASSES = 100
-
 def train(args):
     model = create_model('resnet', args.layers, pretrained=args.pretrained)
     model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
@@ -41,7 +39,7 @@ def train(args):
     iteration = 0
 
     validate(model, criterion, val_loader, args.batch_size)
-    _, best_val_acc = validate(model, criterion, val2_loader, args.batch_size)
+    best_val_loss, best_val_acc = validate(model, criterion, val2_loader, args.batch_size)
 
     lr_scheduler.step(best_val_acc)
     model.train()
@@ -64,13 +62,13 @@ def train(args):
                     .format(epoch, args.batch_size*(batch_idx+1), train_loader.num,
                     loss.item(), train_loss/(batch_idx+1), current_lr, (time.time() - bg) / 60), end='\r')
 
-            if iteration % 200 == 0:
+            if iteration % 100 == 0:
                 #val_loss = validate(model, criterion, val_loader, args.batch_size)
-                _, val_acc = validate(model, criterion, val2_loader, args.batch_size)
+                val_loss, val_acc = validate(model, criterion, val2_loader, args.batch_size)
                 model.train()
                 #print('\nval loss: {:.4f}'.format(val_loss))
-                if val_acc > best_val_acc:
-                    best_val_acc = val_acc
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
                     print('saveing... {}'.format(model_file))
                     torch.save(model.state_dict(), model_file)
                 lr_scheduler.step(val_acc)
@@ -122,12 +120,14 @@ def get_lrs(optimizer):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inclusive')
-    parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
-    parser.add_argument('--batch_size', default=96, type=int, help='batch size')
-    parser.add_argument('--layers', default=50, type=int, help='batch size')
+    parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
+    parser.add_argument('--batch_size', default=256, type=int, help='batch size')
+    parser.add_argument('--layers', default=34, type=int, help='batch size')
     parser.add_argument('--epochs', default=50, type=int, help='epochs')
-    parser.add_argument('--pretrained',action='store_true', help='pretrained')
+    parser.add_argument('--pretrained',action='store_true', default=True, help='pretrained')
     args = parser.parse_args()
+
+    print(args)
 
     log.basicConfig(
         filename = 'trainlog.txt', 

@@ -14,7 +14,7 @@ from loader import get_train_loader, get_val_loader
 import settings
 from metrics import accuracy
 
-N_CLASSES = 100
+N_CLASSES = settings.N_CLASSES
 
 def create_model(model_name, layers, pretrained):
     if model_name == 'resnet' and pretrained:

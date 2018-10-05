@@ -1,29 +1,44 @@
 import os
 import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
 from utils import get_classes, get_val2_meta
 import settings
 
 bad_ids = ['a251467db63ddc0c', 'a254fdb8377c32ac', 'a256e3fc24eb2692']
 
-def generate_train_labels_from_human(classes, output_file):
-    human_labels = pd.read_csv(settings.HUMAN_TRAIN_LABEL_FILE)
+def generate_train_split_from_human(classes, output_file):
+    df_human_labels = pd.read_csv(settings.HUMAN_TRAIN_LABEL_FILE) #, index_col='ImageID')
+    #print(df_human_labels.loc['a251467db63ddc0c'])
+    print(df_human_labels.ImageID[:10])
     #classes = get_classes()
-    print(human_labels.shape)
-    print(human_labels.LabelName.unique().shape)
-    human_labels = human_labels[human_labels['LabelName'].isin(classes)]
+    print('total labels:', df_human_labels.shape)
+    print('total classes:', df_human_labels.LabelName.unique().shape)
+    df_human_labels = df_human_labels[df_human_labels['LabelName'].isin(classes)]
 
-    print(human_labels.shape)
-    human_labels = human_labels[human_labels['Confidence'] == 1]
+    print('trainable labels:', df_human_labels.shape)
+    print('trainable classes:', df_human_labels.LabelName.unique().shape)
+    df_human_labels = df_human_labels[df_human_labels['Confidence'] == 1]
 
-    print('conf1:', human_labels.shape)
-    print(human_labels.LabelName.unique().shape)
+    print('conf1:', df_human_labels.shape)
+    print(df_human_labels.LabelName.unique().shape)
 
-    df = human_labels.groupby('ImageID')['LabelName'].apply(' '.join).reset_index()
-    print(df.head())
-    print(df.shape)
-    df = df[~df['ImageID'].isin(bad_ids)]
-    print(df.shape)
+    df_human_labels = df_human_labels[~df_human_labels.ImageID.isin(bad_ids)]
+    print('trainable labels:', df_human_labels.shape)
+    print('trainable images:', df_human_labels.ImageID.unique().shape)
+    print('trainable classes:', df_human_labels.LabelName.unique().shape)
+
+    df = df_human_labels.groupby('ImageID')['LabelName'].apply(' '.join).reset_index()
+    print('trainable images:', df.shape)
+    df = shuffle(df)
+    print('shuffled trainable images:', df.shape)
     df.to_csv(output_file, index=False)
+
+    #print(df.head())
+    #print(df.shape)
+    #df = df[~df['ImageID'].isin(bad_ids)]
+    #print(df.shape)
+    #df.to_csv(output_file, index=False)
     #print(df2[df2['E'].isin(['two','four'])])
 
 def find_no_exist_train_files():
@@ -113,10 +128,25 @@ def generate_val2_label():
     filtered_df = pd.DataFrame({'image_id': img_ids, 'labels': labels})
     filtered_df.to_csv(settings.VAL2_LABEL_FILE, header=None, index=False)
 
+
+
+def test_stratify():
+    X = [1, 1, 1, 2,2,2,3,3,3,4,4,4]
+    Y = ['a'] * 6 + ['b']*6
+    print([i for i in zip(X,Y)])
+
+    x_train, x_val, y_train, y_val = train_test_split(X, Y, test_size=0.3, stratify=Y)
+    print('x_train:', x_train)
+    print('y_train:', y_train)
+    print('x_val:', x_val)
+    print('y_val:', y_val)
+
+
 if __name__ == '__main__':
+    #test_stratify()
     #check_val_count()
     #generate_val2_label()
-    generate_train_labels_from_human(get_classes(settings.TOP100_VAL_CLASS_FILE), settings.TRAIN_LABEL_FILE)
+    generate_train_split_from_human(get_classes(settings.CLASSES_FILE), settings.TRAIN_LABEL_FILE)
     #find_no_exist_train_files()
     
     #check_train_count()

@@ -36,17 +36,12 @@ def get_val2_meta():
     print(meta.shape)
     return meta
 
-def get_classes(class_file_name):
+def get_classes(class_file_name=settings.CLASSES_FILE):
     classes = pd.read_csv(class_file_name)['label_code'].values.tolist()
-    #print(len(classes))
+    print(len(classes))
     #print(classes[:10])
-    return classes
-
-def get_class_stoi(classes):
     stoi = {classes[i]: i for i in range(len(classes))}
-    #print(classes[:5])
-    #print(stoi['/m/010jjr'])
-    return stoi
+    return classes, stoi
 
 if __name__ == '__main__':
     #get_classes()

@@ -1,27 +1,29 @@
 import os
 import torch
+import torch.nn as nn
 import pandas as pd
 import settings
 from models import create_model
-from loader import get_test_loader
+from loader import get_test_loader, get_val2_loader
 from utils import get_classes
+from train import validate
 
-threshold = 0.13
-batch_size = 512 #128
+threshold = 0.05
+batch_size = 100 #128
 
-classes = get_classes(settings.CLASSES_FILE)
+classes, _ = get_classes(settings.CLASSES_FILE)
 
 def get_label_names(row):
-    assert len(row) == 100
+    assert len(row) == settings.N_CLASSES
     label_names = [classes[i] for i in range(len(row)) if row[i] == 1]
     tmp = [classes[i] for i in range(len(row)) if row[i] != 0]
     assert len(tmp) == len(label_names)
     return ' '.join(label_names)
 
-def create_submission(predictions):
+def create_submission(predictions, outfile):
     meta = pd.read_csv(settings.STAGE1_SAMPLE_SUB)
     meta['labels'] = predictions
-    meta.to_csv('ensemble_res18_34_50_013_1.csv', index=False)
+    meta.to_csv(outfile, index=False)
 
 def model_predict(model):
     model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
@@ -30,6 +32,9 @@ def model_predict(model):
     model.load_state_dict(torch.load(model_file))
     model = model.cuda()
     model.eval()
+
+    #val2_loader = get_val2_loader(batch_size=batch_size)
+    #validate(model, nn.BCEWithLogitsLoss(), val2_loader, batch_size)
 
     test_loader = get_test_loader(batch_size=batch_size, dev_mode=False)
 
@@ -44,11 +49,13 @@ def model_predict(model):
             else:
                 outputs = torch.cat([outputs, output])
             print('{}/{}'.format(batch_size*(i+1), test_loader.num), end='\r')
+            if i == 0:
+                break
 
     return outputs
 
 def predict():
-    model = create_model('resnet', 18, pretrained=True)
+    model = create_model('resnet', 34, pretrained=True)
     outputs = model_predict(model)
 
     label_names = []
@@ -56,9 +63,9 @@ def predict():
     for row in pred:
         label_names.append(get_label_names(row))
 
-    #print(label_names)
+    print(label_names)
 
-    create_submission(label_names)
+    #create_submission(label_names, 'sub_res34_th015_1.csv')
 
 def ensemble():
     outputs = []
@@ -78,5 +85,5 @@ def ensemble():
 
 
 if __name__ == '__main__':
-    #predict()
-    ensemble()
+    predict()
+    #ensemble()

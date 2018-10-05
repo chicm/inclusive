@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.utils.data as data
 from torchvision import datasets, models, transforms
-from utils import get_class_stoi, get_train_meta, get_val_meta, get_classes, get_test_ids, get_val2_ids, get_val2_meta
+from utils import get_train_meta, get_val_meta, get_classes, get_test_ids, get_val2_ids, get_val2_meta
 from PIL import Image
 import settings
 
@@ -19,7 +19,7 @@ train_transforms = transforms.Compose([
 test_transforms = transforms.Compose([
             transforms.Resize((224,224)),
             transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890])
         ])
 
 class ImageDataset(data.Dataset):
@@ -30,8 +30,7 @@ class ImageDataset(data.Dataset):
         self.img_dir = img_dir
         self.num = len(img_ids)
         self.label_names = label_names
-        self.classes = get_classes(settings.CLASSES_FILE)
-        self.stoi = get_class_stoi(self.classes)
+        self.classes, self.stoi = get_classes()
 
     def __getitem__(self, index):
         fn = os.path.join(self.img_dir, '{}.jpg'.format(self.img_ids[index]))
