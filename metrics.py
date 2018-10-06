@@ -2,6 +2,7 @@ from sklearn import metrics
 import torch
 import numpy as np
 
+N_CLASSESS = 100
 
 def accuracy(logits, target):
     '''
@@ -16,8 +17,42 @@ def accuracy(logits, target):
         pred = (torch.sigmoid(logits) > t).byte()
         corrects = (pred.eq(target) * target).sum().item()
         incorrects = (pred.ne(target) * (target.eq(0))).sum().item()
-        results.append((corrects, incorrects, round(corrects/(incorrects+1),3), t))
+        results.append((corrects, incorrects, round(corrects/(incorrects+1),3), t, target.sum().item()))
     return results
+
+def accuracy_th(logits, target, thresholds):
+    '''
+    logits: N,C
+    target: N,C
+    '''
+    #thresholds = [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6]
+    results = []
+    target = target.byte()
+    #pred = pred.topk(3, )
+    #for t in thresholds:
+    pred = (torch.sigmoid(logits) > thresholds).byte()
+    corrects = (pred.eq(target) * target).sum().item()
+    incorrects = (pred.ne(target) * (target.eq(0))).sum().item()
+    results.append((corrects, incorrects, round(corrects/(incorrects+1),3), 'optimized'))
+    
+    return results
+
+def find_threshold(logits, targets):
+    thresholds = [0.15]*N_CLASSESS
+    outputs = torch.sigmoid(logits)
+    for i in range(N_CLASSESS):
+        best_t = 0.15
+        best_score = f2_score(targets, outputs, threshold=torch.Tensor(thresholds).cuda())
+        for t in range(60):
+            cur_th = t/100.+0.001
+            thresholds[i] = cur_th
+            score = f2_score(targets, outputs, threshold=torch.Tensor(thresholds).cuda())
+            if score > best_score:
+                best_score = score
+                best_t = cur_th
+        thresholds[i] = best_t
+    #print(thresholds)
+    return thresholds
 
 def topk_accuracy(output, label, topk=(1,100)):
     maxk = max(topk)
@@ -60,7 +95,7 @@ def fbeta_score(y_true, y_pred, beta, threshold, eps=1e-9):
         div(precision.mul(beta2) + recall + eps).
         mul(1 + beta2))
 
-if __name__ == '__main__':
+def test_f2():
     y_pred = np.array([[0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0],
                     [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
                     [1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
@@ -81,3 +116,21 @@ if __name__ == '__main__':
     #print('Scores are {:.3f} (sklearn) and {:.3f} (pytorch)'.format(fbeta_sklearn, fbeta_pytorch))
     print(fbeta_pytorch.cuda().item())
     print('Scores are {:.3f}'.format(fbeta_pytorch))
+
+def test_f2_2():
+    y_pred = np.array([[1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0]])
+
+    y_true = np.array([[0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0]])
+
+    py_pred = torch.from_numpy(y_pred)
+    py_true = torch.from_numpy(y_true)
+
+    fbeta_pytorch = f2_score(py_true, py_pred)
+    #fbeta_sklearn = metrics.fbeta_score(y_true, y_pred, 2, average='samples')
+    #print('Scores are {:.3f} (sklearn) and {:.3f} (pytorch)'.format(fbeta_sklearn, fbeta_pytorch))
+    print(fbeta_pytorch.cuda().item())
+    print('Scores are {:.3f}'.format(fbeta_pytorch))
+
+if __name__ == '__main__':
+    print(len(best_ths))
+    test_f2_2()

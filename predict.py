@@ -6,8 +6,10 @@ from models import create_model
 from loader import get_test_loader
 from utils import get_classes
 
-threshold = 0.13
+#threshold = 0.13
 batch_size = 512 #128
+
+thresholds = [0.021, 0.591, 0.521, 0.001, 0.15, 0.031, 0.021, 0.001, 0.011, 0.041, 0.011, 0.001, 0.15, 0.561, 0.011, 0.011, 0.011, 0.001, 0.15, 0.15, 0.021, 0.421, 0.011, 0.15, 0.011, 0.15, 0.15, 0.181, 0.231, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.551, 0.15, 0.15, 0.15, 0.531, 0.15, 0.411, 0.15, 0.271, 0.15, 0.15, 0.07100000000000001, 0.15, 0.521, 0.491, 0.15, 0.581, 0.15, 0.15, 0.15, 0.551, 0.15, 0.15, 0.15, 0.15, 0.15, 0.581, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.341, 0.15, 0.15, 0.15, 0.481, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.421, 0.281, 0.15, 0.15, 0.15, 0.15]
 
 classes = get_classes(settings.CLASSES_FILE)
 
@@ -21,7 +23,7 @@ def get_label_names(row):
 def create_submission(predictions):
     meta = pd.read_csv(settings.STAGE1_SAMPLE_SUB)
     meta['labels'] = predictions
-    meta.to_csv('ensemble_res18_34_50_013_1.csv', index=False)
+    meta.to_csv('res34_optim_threshold.csv', index=False)
 
 def model_predict(model):
     model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
@@ -48,11 +50,11 @@ def model_predict(model):
     return outputs
 
 def predict():
-    model = create_model('resnet', 18, pretrained=True)
+    model = create_model('resnet', 34, pretrained=True)
     outputs = model_predict(model)
 
     label_names = []
-    pred = (outputs > threshold).byte().cpu().numpy()
+    pred = (outputs > torch.Tensor(thresholds).cuda()).byte().cpu().numpy()
     for row in pred:
         label_names.append(get_label_names(row))
 
@@ -78,5 +80,5 @@ def ensemble():
 
 
 if __name__ == '__main__':
-    #predict()
-    ensemble()
+    predict()
+    #ensemble()
