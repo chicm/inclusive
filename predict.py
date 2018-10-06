@@ -8,10 +8,12 @@ from loader import get_test_loader, get_val2_loader
 from utils import get_classes
 from train import validate
 
-threshold = 0.05
-batch_size = 100 #128
+#threshold = 0.13
+batch_size = 512 #128
 
-classes, _ = get_classes(settings.CLASSES_FILE)
+thresholds = [0.021, 0.591, 0.521, 0.001, 0.15, 0.031, 0.021, 0.001, 0.011, 0.041, 0.011, 0.001, 0.15, 0.561, 0.011, 0.011, 0.011, 0.001, 0.15, 0.15, 0.021, 0.421, 0.011, 0.15, 0.011, 0.15, 0.15, 0.181, 0.231, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.551, 0.15, 0.15, 0.15, 0.531, 0.15, 0.411, 0.15, 0.271, 0.15, 0.15, 0.07100000000000001, 0.15, 0.521, 0.491, 0.15, 0.581, 0.15, 0.15, 0.15, 0.551, 0.15, 0.15, 0.15, 0.15, 0.15, 0.581, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.341, 0.15, 0.15, 0.15, 0.481, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.421, 0.281, 0.15, 0.15, 0.15, 0.15]
+
+classes = get_classes(settings.CLASSES_FILE)
 
 def get_label_names(row):
     assert len(row) == settings.N_CLASSES
@@ -23,7 +25,7 @@ def get_label_names(row):
 def create_submission(predictions, outfile):
     meta = pd.read_csv(settings.STAGE1_SAMPLE_SUB)
     meta['labels'] = predictions
-    meta.to_csv(outfile, index=False)
+    meta.to_csv('res34_optim_threshold.csv', index=False)
 
 def model_predict(model):
     model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
@@ -59,7 +61,7 @@ def predict():
     outputs = model_predict(model)
 
     label_names = []
-    pred = (outputs > threshold).byte().cpu().numpy()
+    pred = (outputs > torch.Tensor(thresholds).cuda()).byte().cpu().numpy()
     for row in pred:
         label_names.append(get_label_names(row))
 
