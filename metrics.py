@@ -2,8 +2,6 @@ from sklearn import metrics
 import torch
 import numpy as np
 
-N_CLASSESS = 100
-
 def accuracy(logits, target):
     '''
     logits: N,C
@@ -38,6 +36,10 @@ def accuracy_th(logits, target, thresholds):
     return results
 
 def find_threshold(logits, targets):
+    #print('>>>', logits.size(), targets.size())
+    N_CLASSESS = logits.size(1)
+    assert logits.size() == targets.size()
+
     thresholds = [0.15]*N_CLASSESS
     outputs = torch.sigmoid(logits)
     for i in range(N_CLASSESS):

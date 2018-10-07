@@ -2,21 +2,19 @@ import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
-from utils import get_classes, get_val2_meta
+from utils import get_classes
 import settings
 
 bad_ids = ['a251467db63ddc0c', 'a254fdb8377c32ac', 'a256e3fc24eb2692']
 
-def generate_train_split_from_human(classes, output_file):
-    df_human_labels = pd.read_csv(settings.HUMAN_TRAIN_LABEL_FILE) #, index_col='ImageID')
-    #print(df_human_labels.loc['a251467db63ddc0c'])
-    print(df_human_labels.ImageID[:10])
-    #classes = get_classes()
-    print('total labels:', df_human_labels.shape)
+def _generate_train_label(classes, output_file):
+    print('creating train labels:', len(classes), output_file)
+    df_human_labels = pd.read_csv(settings.TRAIN_HUMAN_LABELS) #, index_col='ImageID')
+    print('total human labels:', df_human_labels.shape)
     print('total classes:', df_human_labels.LabelName.unique().shape)
     df_human_labels = df_human_labels[df_human_labels['LabelName'].isin(classes)]
 
-    print('trainable labels:', df_human_labels.shape)
+    print('trainable labels for specified classes:', df_human_labels.shape)
     print('trainable classes:', df_human_labels.LabelName.unique().shape)
     df_human_labels = df_human_labels[df_human_labels['Confidence'] == 1]
 
@@ -32,7 +30,27 @@ def generate_train_split_from_human(classes, output_file):
     print('trainable images:', df.shape)
     df = shuffle(df)
     print('shuffled trainable images:', df.shape)
+    print('saving:', output_file)
     df.to_csv(output_file, index=False)
+
+def generate_train_labels():
+    if not os.path.exists(settings.TRAIN_LABEL_DIR):
+        os.makedirs(settings.TRAIN_LABEL_DIR)
+
+    top_classes, _ = get_classes('trainable', 0, 50)
+    _generate_train_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_trainable_0_50.csv'))
+    top_classes, _ = get_classes('trainable', 50, 200)
+    _generate_train_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_trainable_50_200.csv'))
+    top_classes, _ = get_classes('trainable', 200, 500)
+    _generate_train_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_trainable_200_500.csv'))
+    top_classes, _ = get_classes('trainable', 500, 2000)
+    _generate_train_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_trainable_500_2000.csv'))
+
+    top_classes, _ = get_classes('tuning', 0, 100)
+    _generate_train_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_tuning_0_100.csv'))
+    top_classes, _ = get_classes('tuning', 100, 484)
+    _generate_train_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_tuning_100_484.csv'))
+
 
     #print(df.head())
     #print(df.shape)
@@ -115,18 +133,33 @@ def generate_topk_class():
     df3 = pd.DataFrame(list(u), columns=['label_code'])
     df3.to_csv(settings.TOP272_CLASS_FILE, index=False)
 
-def generate_val2_label():
-    classes = get_classes(settings.CLASSES_FILE)
-    val2_meta = pd.read_csv(os.path.join(settings.DATA_DIR,'tuning_labels.csv'), names=['ImageID', 'LabelName'])
+# create stage 1 validation labels for specified classes
+def _generate_tuning_label(classes, out_file):
+    df_turning_labels = pd.read_csv(settings.TUNING_LABELS, names=['ImageID', 'LabelName'])
     img_ids = []
     labels = []
-    for row in val2_meta.values:
+    for row in df_turning_labels.values:
         filtered_label = [x for x in row[1].split() if x in classes]
         if len(filtered_label) > 0:
             img_ids.append(row[0])
             labels.append(' '.join(filtered_label))
     filtered_df = pd.DataFrame({'image_id': img_ids, 'labels': labels})
-    filtered_df.to_csv(settings.VAL2_LABEL_FILE, header=None, index=False)
+    filtered_df.to_csv(out_file, header=None, index=False)
+
+def create_tuning_labels():
+    top100_classes, _ = get_classes('tuning', 0, 100)
+    _generate_tuning_label(top100_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'tuning_labels_tuning_0_100.csv'))
+    classes_384, _ = get_classes('tuning', 100, 484)
+    _generate_tuning_label(classes_384, os.path.join(settings.TRAIN_LABEL_DIR, 'tuning_labels_tuning_100_484.csv'))
+
+    top_classes, _ = get_classes('trainable', 0, 50)
+    _generate_tuning_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'tuning_labels_trainable_0_50.csv'))
+    top_classes, _ = get_classes('trainable', 50, 200)
+    _generate_tuning_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'tuning_labels_trainable_50_200.csv'))
+    top_classes, _ = get_classes('trainable', 200, 500)
+    _generate_tuning_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'tuning_labels_trainable_200_500.csv'))
+    top_classes, _ = get_classes('trainable', 500, 2000)
+    _generate_tuning_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'tuning_labels_trainable_500_2000.csv'))
 
 def create_class_counts_df():
     classes = pd.read_csv(settings.CLASSES_TRAINABLE)['label_code'].values.tolist()
@@ -134,7 +167,9 @@ def create_class_counts_df():
     df_labels = df_labels[df_labels.index.isin(classes)]
     df_counts = df_labels.index.value_counts().to_frame(name='counts')
     df_counts.index.name = 'label_code'
-    df_counts.to_csv(os.path.join(settings.DATA_DIR, 'sorted-classes-trainable.csv'))
+    df_counts['index_copy'] = df_counts.index
+    df_counts = df_counts.sort_values(['counts', 'index_copy'], ascending=False)
+    df_counts.to_csv(settings.SORTED_CLASSES_TRAINABLE, columns=['counts'])
 
 def create_tuning_class_counts_df():
     classes = pd.read_csv(settings.CLASSES_TRAINABLE)['label_code'].values.tolist()
@@ -142,10 +177,12 @@ def create_tuning_class_counts_df():
 
     df_counts = tuning_labels['labels'].str.split().apply(pd.Series).stack().value_counts().to_frame(name='counts')
     df_counts.index.name = 'label_code'
+    df_counts['index_copy'] = df_counts.index
+    df_counts = df_counts.sort_values(['counts', 'index_copy'], ascending=False)
     print(df_counts.head(), df_counts.shape)
     df_counts = df_counts[df_counts.index.isin(classes)]
     print(df_counts.shape)
-    df_counts.to_csv(os.path.join(settings.DATA_DIR, 'sorted-tuning-classes.csv'))
+    df_counts.to_csv(settings.SORTED_TUNING_CLASSES, columns=['counts'])
 
 '''
     print(df_labels.shape)
@@ -178,5 +215,7 @@ if __name__ == '__main__':
     #check_train_count()
     #check_class_intersection()
     #generate_topk_class()
-    #create_class_counts_df()
+    create_class_counts_df()
     create_tuning_class_counts_df()
+    create_tuning_labels()
+    generate_train_labels()

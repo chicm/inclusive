@@ -8,17 +8,20 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
 
-from loader import get_train_loader, get_val_loader, get_val2_loader
+from loader import get_train_val_loaders, get_tuning_loader
 import settings
 from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_threshold
 from models import create_model, AttentionResNet
 
 def train(args):
-    model = create_model('resnet', args.layers, pretrained=args.pretrained)
-    model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
+    model = create_model('resnet', args.layers, pretrained=not args.scratch, num_classes=args.end_index-args.start_index)
+    sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
+    model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best.pth')
     parent_dir = os.path.dirname(model_file)
     if not os.path.exists(parent_dir):
-        os.mkdir(parent_dir)
+        os.makedirs(parent_dir)
+
+    print('model file: {}, exist: {}'.format(model_file, os.path.exists(model_file)))
 
     CKP = model_file
     if os.path.exists(CKP):
@@ -26,30 +29,37 @@ def train(args):
         model.load_state_dict(torch.load(CKP))
     model = model.cuda()
     criterion = nn.BCEWithLogitsLoss()
-    #optimizer = optim.Adam(model.parameters(), weight_decay=0.0001, lr=args.lr)
-    optimizer = optim.SGD(model.parameters(), momentum=0.9, weight_decay=0.0001, lr=args.lr)
-    lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=6, min_lr=1e-5)
 
-    train_loader = get_train_loader(batch_size=args.batch_size)
-    #val_loader = get_val_loader(batch_size=args.batch_size)
-    val2_loader = get_val2_loader(batch_size=args.batch_size)
+    if args.optim == 'Adam':
+        optimizer = optim.Adam(model.parameters(), weight_decay=0.0001, lr=args.lr)
+    else:
+        optimizer = optim.SGD(model.parameters(), momentum=0.9, weight_decay=0.0001, lr=args.lr)
+
+    lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=6, min_lr=args.min_lr)
+
+    train_loader, _ = get_train_val_loaders(args, batch_size=args.batch_size)
+    val_loader = get_tuning_loader(args, batch_size=args.batch_size)
     model.train()
 
-    train_loss = 0
     iteration = 0
 
-    #validate(model, criterion, val_loader, args.batch_size)
-    _, best_val_acc = validate(model, criterion, val2_loader, args.batch_size)
+    print('epoch | itr |   lr    |   %             |  loss  |  avg   |  loss  | optim f2 |  15 f2  | 10 f2  |  best f2  | time | save |')
+
+    best_val_loss, best_val_score = validate(model, criterion, val_loader, args.batch_size, args.no_score)
+
+    print('val   |     |         |                 |        |        | {:.4f} | {:.4f}   |         |        |  {:.4f}   |      |      |'.format(
+        best_val_loss, best_val_score, best_val_score))
 
     if args.val:
         return
 
-    lr_scheduler.step(best_val_acc)
+    lr_scheduler.step(best_val_score - best_val_loss)
     model.train()
 
     bg = time.time()
     current_lr = get_lrs(optimizer) 
     for epoch in range(args.epochs):
+        train_loss = 0
         for batch_idx, data in enumerate(train_loader):
             iteration += 1
             x, target = data
@@ -61,25 +71,31 @@ def train(args):
             optimizer.step()
 
             train_loss += loss.item()
-            print('epoch {}: {}/{} batch loss: {:.4f}, avg loss: {:.4f} lr: {}, {:.1f} min'
-                    .format(epoch, args.batch_size*(batch_idx+1), train_loader.num,
-                    loss.item(), train_loss/(batch_idx+1), current_lr, (time.time() - bg) / 60), end='\r')
+            print('\r {:4d} |{:4d} | {:.5f} | {:7d}/{:7d} | {:.4f} | {:.4f} |'
+                    .format(epoch, iteration, float(current_lr[0]), args.batch_size*(batch_idx+1), train_loader.num,
+                    loss.item(), train_loss/(batch_idx+1)), end='')
 
-            if iteration % 100 == 0:
-                #val_loss = validate(model, criterion, val_loader, args.batch_size)
-                val_loss, val_acc = validate(model, criterion, val2_loader, args.batch_size)
+            if iteration % args.iter_save == 0:
+                val_loss, val_score = validate(model, criterion, val_loader, args.batch_size, args.no_score)
                 model.train()
-                #print('\nval loss: {:.4f}'.format(val_loss))
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    print('saveing... {}'.format(model_file))
-                    torch.save(model.state_dict(), model_file)
-                lr_scheduler.step(val_acc)
-                current_lr = get_lrs(optimizer) 
-                print('\n\nlr:', current_lr)
+                _save_ckp = ''
 
-def validate(model, criterion, val_loader, batch_size):
-    print('\nvalidating...')
+                if val_score - val_loss > best_val_score - best_val_loss:
+                    best_val_score = val_score
+                    best_val_loss = val_loss
+
+                    torch.save(model.state_dict(), model_file)
+                    _save_ckp = '*'
+                
+                lr_scheduler.step(val_score-val_loss)
+                current_lr = get_lrs(optimizer) 
+
+                print(' {:.4f} | {:.4f}   |         |        |  {:.4f}   | {:.1f}  | {:4s} |'.format(
+                    val_loss, val_score, best_val_score, (time.time() - bg) / 60, _save_ckp))
+                bg = time.time()
+
+def validate(model, criterion, val_loader, batch_size, no_score=False):
+    #print('\nvalidating...')
     model.eval()
     val_loss = 0
     targets = None
@@ -100,23 +116,26 @@ def validate(model, criterion, val_loader, batch_size):
             val_loss += loss.item()
             
     val_loss = val_loss / (val_loader.num/batch_size)
+    optimized_score = 0.
 
-    best_th = find_threshold(outputs, targets)
-    print(best_th)
-    optimized_score = f2_score(targets, torch.sigmoid(outputs), threshold=torch.Tensor(best_th).cuda())
-    print('optimized score:', optimized_score)
-    print('optimized acc:', accuracy_th(outputs, targets, torch.Tensor(best_th).cuda()))
+    if not no_score:
+        best_th = find_threshold(outputs, targets)
+        optimized_score = f2_score(targets, torch.sigmoid(outputs), threshold=torch.Tensor(best_th).cuda())
 
-    acc = accuracy(outputs, targets)
-    print('acc:', acc)
-    acc_sum = sum([acc[i][2] for i in range(1,7)])
+    #print(best_th)
+    #print('optimized score:', optimized_score)
+    #print('optimized acc:', accuracy_th(outputs, targets, torch.Tensor(best_th).cuda()))
 
-    score = f2_scores(outputs, targets)
-    print('f2 scores:', score)
-    score_sum = sum([score[i][1] for i in range(1,7)])
-    print('val loss: {:.4f}, threshold f2 score: {:.4f}, threshold acc: {:.4f}'
-        .format(val_loss, score_sum, acc_sum))
-    log.info(str(score))
+    #acc = accuracy(outputs, targets)
+    #print('acc:', acc)
+    #acc_sum = sum([acc[i][2] for i in range(1,7)])
+
+    #score = f2_scores(outputs, targets)
+    #print('f2 scores:', score)
+    #score_sum = sum([score[i][1] for i in range(1,7)])
+    #print('val loss: {:.4f}, threshold f2 score: {:.4f}, threshold acc: {:.4f}'
+    #    .format(val_loss, score_sum, acc_sum))
+    #log.info(str(optimized_score))
     return val_loss, optimized_score
 
        
@@ -129,12 +148,20 @@ def get_lrs(optimizer):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inclusive')
-    parser.add_argument('--lr', default=0.004, type=float, help='learning rate')
+    parser.add_argument('--optim', choices=['Adam', 'SGD'], type=str, default='SGD', help='optimizer')
+    parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
+    parser.add_argument('--min_lr', default=1e-5, type=float, help='min learning rate')
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
+    parser.add_argument('--model_name', default='resnet', type=str, help='model name')
     parser.add_argument('--layers', default=34, type=int, help='batch size')
     parser.add_argument('--epochs', default=50, type=int, help='epochs')
-    parser.add_argument('--pretrained',action='store_true', help='pretrained')
+    parser.add_argument('--iter_save', default=200, type=int, help='epochs')
+    parser.add_argument('--scratch',action='store_true', help='pretrained')
     parser.add_argument('--val',action='store_true', help='val only')
+    parser.add_argument('--cls_type', choices=['trainable', 'tuniing'], type=str, default='tuning', help='train class type')
+    parser.add_argument('--start_index', default=0, type=int, help='start index of classes')
+    parser.add_argument('--end_index', default=100, type=int, help='end index of classes')
+    parser.add_argument('--no_score',action='store_true', help='do not calculate f2 score')
     args = parser.parse_args()
 
     print(args)

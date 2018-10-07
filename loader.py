@@ -2,8 +2,9 @@ import os, cv2, glob
 import numpy as np
 import torch
 import torch.utils.data as data
+from attrdict import AttrDict
 from torchvision import datasets, models, transforms
-from utils import get_train_meta, get_val_meta, get_classes, get_test_ids, get_val2_ids, get_val2_meta
+from utils import get_classes, get_test_ids, get_train_val_meta, get_tuning_meta
 from PIL import Image
 import settings
 
@@ -23,14 +24,15 @@ test_transforms = transforms.Compose([
         ])
 
 class ImageDataset(data.Dataset):
-    def __init__(self, train_mode, img_ids, img_dir, label_names=None):
+    def __init__(self, train_mode, img_ids, img_dir, classes, stoi, label_names=None):
         self.input_size = settings.IMG_SZ
         self.train_mode = train_mode
         self.img_ids = img_ids
         self.img_dir = img_dir
         self.num = len(img_ids)
         self.label_names = label_names
-        self.classes, self.stoi = get_classes()
+        self.classes = classes 
+        self.stoi = stoi
 
     def __getitem__(self, index):
         fn = os.path.join(self.img_dir, '{}.jpg'.format(self.img_ids[index]))
@@ -77,68 +79,67 @@ class ImageDataset(data.Dataset):
         target = [ (1 if i in label_idx else 0) for i in range(len(self.classes))]
         return torch.FloatTensor(target)
 
-def get_train_loader(img_dir=settings.TRAIN_IMG_DIR, batch_size=8, dev_mode=False, shuffle=True):
-    meta = get_train_meta()
+def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=True):
+    classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
+    train_meta, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
+    if dev_mode:
+        train_meta = train_meta.iloc[:10]
+        val_meta = val_meta.iloc[:10]
+    img_dir = settings.TRAIN_IMG_DIR
+    train_set = ImageDataset(True, train_meta['ImageID'].values.tolist(), img_dir, classes, stoi, train_meta['LabelName'].values.tolist())
+    val_set = ImageDataset(False, val_meta['ImageID'].values.tolist(), img_dir, classes, stoi, val_meta['LabelName'].values.tolist())
+
+    train_loader = data.DataLoader(train_set, batch_size=batch_size, shuffle=train_shuffle, num_workers=4, collate_fn=train_set.collate_fn, drop_last=True)
+    train_loader.num = train_set.num
+
+    val_loader = data.DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=val_set.collate_fn, drop_last=False)
+    val_loader.num = val_set.num
+
+    return train_loader, val_loader
+
+def get_tuning_loader(args, batch_size=32, dev_mode=False, shuffle=False):
+    '''
+    Stage 1 tuning validating loader
+    '''
+    img_dir = settings.TEST_IMG_DIR
+    classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
+    meta = get_tuning_meta(args.cls_type, args.start_index, args.end_index)
     if dev_mode:
         meta = meta.iloc[:10]
 
     img_ids = meta['ImageID'].values.tolist()
     labels = meta['LabelName'].values.tolist()
     print(len(img_ids))
-    
-    dset = ImageDataset(True, img_ids, img_dir, labels)
-    dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn, drop_last=True)
+
+    dset = ImageDataset(False, img_ids, img_dir, classes, stoi, labels)
+    dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn, drop_last=False)
     dloader.num = dset.num
     return dloader
 
-def get_val_loader(img_dir=settings.VAL_IMG_DIR, batch_size=8, dev_mode=False, shuffle=False):
-    meta = get_val_meta()
-    if dev_mode:
-        meta = meta.iloc[:10]
-
-    img_ids = meta['ImageID'].values.tolist()
-    labels = meta['LabelName'].values.tolist()
-    print(len(img_ids))
-    
-    dset = ImageDataset(False, img_ids, img_dir, labels)
-    dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn)
-    dloader.num = dset.num
-    return dloader
-
-def get_val2_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8, dev_mode=False, shuffle=False):
-    meta = get_val2_meta()
-    if dev_mode:
-        meta = meta.iloc[:10]
-
-    img_ids = meta['ImageID'].values.tolist()
-    labels = meta['LabelName'].values.tolist()
-    print(len(img_ids))
-    
-    dset = ImageDataset(False, img_ids, img_dir, labels)
-    dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=shuffle, num_workers=4, collate_fn=dset.collate_fn)
-    dloader.num = dset.num
-    return dloader
-
-def get_test_loader(img_dir=settings.TEST_IMG_DIR, batch_size=8, dev_mode=False):
+def get_test_loader(args, batch_size=8, dev_mode=False):
     img_ids = get_test_ids()
+    classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
 
+    img_dir = settings.TEST_IMG_DIR
     if dev_mode:
         img_ids = img_ids[:10]
     
-    dset = ImageDataset(False, img_ids, img_dir)
+    dset = ImageDataset(False, img_ids, img_dir, classes, stoi)
     dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=dset.collate_fn, drop_last=False)
     dloader.num = dset.num
     return dloader
 
 def test_train_loader():
-    loader = get_train_loader(dev_mode=True)
+    args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 50})
+    loader, _ = get_train_val_loaders(args, dev_mode=True, batch_size=10)
     for i, data in enumerate(loader):
         imgs, targets = data
         print(targets)
         print(imgs.size(), targets.size())
 
 def test_test_loader():
-    loader = get_test_loader()
+    args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 50})
+    loader = get_test_loader(args, dev_mode=True)
     for i, data in enumerate(loader):
         imgs = data
         print(imgs.size())
@@ -146,8 +147,9 @@ def test_test_loader():
             print(imgs)
             break
 
-def test_val2_loader():
-    loader = get_val2_loader(dev_mode=True)
+def test_tuning_loader():
+    args = AttrDict({'cls_type': 'tuning', 'start_index': 0, 'end_index': 100})
+    loader = get_tuning_loader(args, dev_mode=True)
     for i, data in enumerate(loader):
         imgs, targets = data
         print(targets)
@@ -156,7 +158,7 @@ def test_val2_loader():
 
 if __name__ == '__main__':
     test_test_loader()
-    test_val2_loader()
+    test_tuning_loader()
     test_train_loader()
     #small_dict, img_ids = load_small_train_ids()
     #print(img_ids[:10])

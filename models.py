@@ -1,38 +1,30 @@
 import os
 import argparse
-import logging as log
-import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
-
 from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
 import net.resnet
-from loader import get_train_loader, get_val_loader
 import settings
-from metrics import accuracy
 
-N_CLASSES = settings.N_CLASSES
-
-def create_model(model_name, layers, pretrained):
+def create_model(model_name, layers, pretrained, num_classes):
     if model_name == 'resnet' and pretrained:
-        model, _ = create_pretrained_resnet(layers)
-        model.name = 'resnet'+str(layers)
+        model, _ = create_pretrained_resnet(layers, num_classes)
+        model.name = 'resnet_{}_{}'.format(layers, num_classes)
     elif model_name == 'resnet' and not pretrained:
-        model = create_resnet_model(layers)
-        model.name = 'resnet_scratch_'+str(layers)
+        model = create_resnet_model(layers, num_classes)
+        model.name = 'resnet_scratch_{}_{}'.format(layers, num_classes)
 
     return model
 
-def create_resnet_model(layers):
+def create_resnet_model(layers, num_classes):
     if layers not in [18, 32, 34, 50, 101, 152]:
         raise ValueError('Wrong resnet layers')
 
-    return eval('net.resnet.resnet'+str(layers))(pretrained=False, num_classes=N_CLASSES)
+    return eval('net.resnet.resnet'+str(layers))(pretrained=False, num_classes=num_classes)
     
-def create_pretrained_resnet(layers):
+def create_pretrained_resnet(layers, num_classes):
     print('create_pretrained_resnet', layers)
     if layers == 34:
         model, bottom_channels = resnet34(pretrained=True), 512
@@ -48,8 +40,7 @@ def create_pretrained_resnet(layers):
         raise NotImplementedError('only 34, 50, 101, 152 version of Resnet are implemented')
 
     num_ftrs = model.fc.in_features
-    model.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, N_CLASSES)) 
-    model.name = 'resnet'+str(layers)
+    model.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, num_classes)) 
 
     return model, bottom_channels
 
