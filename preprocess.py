@@ -128,7 +128,33 @@ def generate_val2_label():
     filtered_df = pd.DataFrame({'image_id': img_ids, 'labels': labels})
     filtered_df.to_csv(settings.VAL2_LABEL_FILE, header=None, index=False)
 
+def create_class_counts_df():
+    classes = pd.read_csv(settings.CLASSES_TRAINABLE)['label_code'].values.tolist()
+    df_labels = pd.read_csv(settings.TRAIN_HUMAN_LABELS, index_col=['LabelName'])
+    df_labels = df_labels[df_labels.index.isin(classes)]
+    df_counts = df_labels.index.value_counts().to_frame(name='counts')
+    df_counts.index.name = 'label_code'
+    df_counts.to_csv(os.path.join(settings.DATA_DIR, 'sorted-classes-trainable.csv'))
 
+def create_tuning_class_counts_df():
+    classes = pd.read_csv(settings.CLASSES_TRAINABLE)['label_code'].values.tolist()
+    tuning_labels = pd.read_csv(settings.TUNING_LABELS, names=['id', 'labels'])
+
+    df_counts = tuning_labels['labels'].str.split().apply(pd.Series).stack().value_counts().to_frame(name='counts')
+    df_counts.index.name = 'label_code'
+    print(df_counts.head(), df_counts.shape)
+    df_counts = df_counts[df_counts.index.isin(classes)]
+    print(df_counts.shape)
+    df_counts.to_csv(os.path.join(settings.DATA_DIR, 'sorted-tuning-classes.csv'))
+
+'''
+    print(df_labels.shape)
+    df_labels = df_labels[df_labels.LabelName.isin(classes)]
+    print(df_labels.shape)
+    df_counts = df_labels.LabelName.value_counts().to_frame(name='counts')
+    df_counts.index.name = 'label_code'
+    df_counts.to_csv(os.path.join(settings.DATA_DIR, 'sorted-tuning-classes.csv'))
+'''
 
 def test_stratify():
     X = [1, 1, 1, 2,2,2,3,3,3,4,4,4]
@@ -146,9 +172,11 @@ if __name__ == '__main__':
     #test_stratify()
     #check_val_count()
     #generate_val2_label()
-    generate_train_split_from_human(get_classes(settings.CLASSES_FILE), settings.TRAIN_LABEL_FILE)
+    #generate_train_split_from_human(get_classes(settings.CLASSES_FILE), settings.TRAIN_LABEL_FILE)
     #find_no_exist_train_files()
     
     #check_train_count()
     #check_class_intersection()
     #generate_topk_class()
+    #create_class_counts_df()
+    create_tuning_class_counts_df()
