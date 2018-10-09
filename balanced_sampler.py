@@ -18,6 +18,7 @@ class BalancedSammpler():
         self.img_ids = []
         self.full_classes = set()
         self.add_images()
+        print(self.class_counts)
 
     def get_label_indices(self, label_names):
         return [self.stoi[x] for x in label_names.strip().split() if x in self.classes]
@@ -38,11 +39,12 @@ class BalancedSammpler():
 
     def add_images(self, max_rounds = 50):
         rounds = 0
+        print('sampling...')
         while len(self.full_classes) < self.n_classes:
             # row[0]: image_id, row[1]: labels
-            print('sampling..., rounds:', rounds)
+            
             #print(len(self.img_ids))
-            print(self.class_counts)
+            #print(self.class_counts)
             meta = shuffle(self.meta)
             last_image_nums = len(self.img_ids)
             for row in meta.values:
