@@ -16,7 +16,9 @@ def get_classes(cls_type, start_index, end_index):
 def get_train_val_meta(cls_type, start_index, end_index):
     assert cls_type in ['trainable', 'tuning']
 
-    meta_file_name = os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_{}_{}_{}.csv'.format(cls_type, start_index, end_index))
+    #meta_file_name = os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_{}_{}_{}.csv'.format(cls_type, start_index, end_index))
+    meta_file_name = settings.TRAIN_LABEL_FILE
+    
     df_labels = pd.read_csv(meta_file_name, na_filter=False)
     split_index = int(df_labels.shape[0] * 0.9)
 
@@ -38,7 +40,8 @@ def get_tuning_meta(cls_type, start_index, end_index):
     '''
     assert cls_type in ['trainable', 'tuning']
 
-    meta_file_name = os.path.join(settings.TRAIN_LABEL_DIR, 'tuning_labels_{}_{}_{}.csv'.format(cls_type, start_index, end_index))
+    #meta_file_name = os.path.join(settings.TRAIN_LABEL_DIR, 'tuning_labels_{}_{}_{}.csv'.format(cls_type, start_index, end_index))
+    meta_file_name = settings.TUNING_LABELS
     df_labels = pd.read_csv(meta_file_name, names=['ImageID', 'LabelName'], na_filter=False)
     print(df_labels.shape)
     return df_labels
@@ -49,27 +52,8 @@ def get_test_ids():
     print(len(ids))
     return ids
 
-'''
-def get_val2_ids():
-    val_df = pd.read_csv(settings.VAL2_LABEL_FILE, names=['ImageID', 'LabelName'])
-    print(val_df.shape)
-    #print(val_df.values[:5])
-    ids = val_df['ImageID'].values.tolist()
-    #print(len(ids))
-    return ids
-
-def get_val2_meta():
-    meta = pd.read_csv(settings.VAL2_LABEL_FILE, names=['ImageID', 'LabelName'])
-    print(meta.shape)
-    return meta
-
-def get_classes(class_file_name=settings.CLASSES_FILE):
-    classes = pd.read_csv(class_file_name)['label_code'].values.tolist()
-    print(len(classes))
-    #print(classes[:10])
-    stoi = {classes[i]: i for i in range(len(classes))}
-    return classes, stoi
-'''
+def get_trainable_classes():
+    return pd.read_csv(settings.CLASSES_TRAINABLE)['label_code'].values.tolist()
 
 
 if __name__ == '__main__':

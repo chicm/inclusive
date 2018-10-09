@@ -2,13 +2,16 @@ import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
-from utils import get_classes
+from utils import get_classes, get_trainable_classes
 import settings
 
 bad_ids = ['a251467db63ddc0c', 'a254fdb8377c32ac', 'a256e3fc24eb2692']
 
+# Not found trainalbe classes in human labels:
+# '/m/07r2x', '/m/06f8q', '/m/0brl6', '/m/01dgzv', '/m/04q347y', '/m/01wr8'
+
 def _generate_train_label(classes, output_file):
-    print('creating train labels:', len(classes), output_file)
+    #print('creating train labels:', len(classes), output_file)
     df_human_labels = pd.read_csv(settings.TRAIN_HUMAN_LABELS) #, index_col='ImageID')
     print('total human labels:', df_human_labels.shape)
     print('total classes:', df_human_labels.LabelName.unique().shape)
@@ -32,6 +35,9 @@ def _generate_train_label(classes, output_file):
     print('shuffled trainable images:', df.shape)
     print('saving:', output_file)
     df.to_csv(output_file, index=False)
+
+def generate_full_train_labels():
+    _generate_train_label(get_trainable_classes(), os.path.join(settings.DATA_DIR, 'generated_train_labels_7172.csv'))
 
 def generate_train_labels():
     if not os.path.exists(settings.TRAIN_LABEL_DIR):
@@ -217,5 +223,6 @@ if __name__ == '__main__':
     #generate_topk_class()
     #create_class_counts_df()
     #create_tuning_class_counts_df()
-    create_tuning_labels()
-    generate_train_labels()
+    #create_tuning_labels()
+    #generate_train_labels()
+    generate_full_train_labels()

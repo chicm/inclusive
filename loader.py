@@ -76,7 +76,7 @@ class ImageDataset(data.Dataset):
         else:
             return inputs
     def get_label_tensor(self, label_names):
-        label_idx = set([self.stoi[x] for x in label_names.strip().split()])
+        label_idx = set([self.stoi[x] for x in label_names.strip().split() if x in self.classes])
         target = [ (1 if i in label_idx else 0) for i in range(len(self.classes))]
         return torch.FloatTensor(target)
 

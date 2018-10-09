@@ -5,7 +5,6 @@ DATA_DIR = local_settings.DATA_DIR
 TRAIN_IMG_DIR = local_settings.TRAIN_IMG_DIR
 
 IMG_SZ = 224
-N_CLASSES = 7178
 
 MODEL_DIR = os.path.join(DATA_DIR, 'models')
 TRAIN_LABEL_DIR = os.path.join(DATA_DIR, 'gen')
@@ -22,7 +21,5 @@ STAGE_1_SAMPLE_SUBMISSION = os.path.join(DATA_DIR, 'stage_1_sample_submission.cs
 SORTED_CLASSES_TRAINABLE = os.path.join(DATA_DIR, 'sorted-classes-trainable.csv')
 SORTED_TUNING_CLASSES = os.path.join(DATA_DIR, 'sorted-tuning-classes.csv')
 
-CLASSES_FILE = os.path.join(DATA_DIR, 'classes-trainable.csv')
-TRAIN_LABEL_FILE = os.path.join(DATA_DIR, 'generated_train_labels_7178.csv')
-VAL2_LABEL_FILE = os.path.join(DATA_DIR, 'tuning_labels.csv')
+TRAIN_LABEL_FILE = os.path.join(DATA_DIR, 'generated_train_labels_7172.csv')
 
