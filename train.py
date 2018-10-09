@@ -10,7 +10,7 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLRO
 
 from loader import get_train_val_loaders, get_tuning_loader
 import settings
-from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_threshold
+from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_threshold,find_fix_threshold
 from models import create_model, AttentionResNet
 
 def train(args):
@@ -37,7 +37,7 @@ def train(args):
 
     lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=6, min_lr=args.min_lr)
 
-    train_loader, _ = get_train_val_loaders(args, batch_size=args.batch_size)
+    #train_loader, _ = get_train_val_loaders(args, batch_size=args.batch_size)
     val_loader = get_tuning_loader(args, batch_size=args.batch_size)
     model.train()
 
@@ -60,6 +60,8 @@ def train(args):
     current_lr = get_lrs(optimizer) 
     for epoch in range(args.epochs):
         train_loss = 0
+        if epoch % 20 == 0:
+            train_loader, _ = get_train_val_loaders(args, batch_size=args.batch_size)
         for batch_idx, data in enumerate(train_loader):
             iteration += 1
             x, target = data
@@ -121,6 +123,7 @@ def validate(model, criterion, val_loader, batch_size, no_score=False):
     if not no_score:
         best_th = find_threshold(outputs, targets)
         optimized_score = f2_score(targets, torch.sigmoid(outputs), threshold=torch.Tensor(best_th).cuda())
+        #optimized_score = f2_score(targets, torch.sigmoid(outputs), best_th)
 
     #print(best_th)
     #print('optimized score:', optimized_score)
