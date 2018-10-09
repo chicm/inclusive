@@ -37,10 +37,11 @@ class BalancedSammpler():
                 return False
         return True
 
-    def add_images(self, max_rounds = 50):
+    def add_images(self, max_rounds = 20):
         rounds = 0
         print('sampling...')
         while len(self.full_classes) < self.n_classes:
+            print('.', end='')
             # row[0]: image_id, row[1]: labels
             
             #print(len(self.img_ids))
