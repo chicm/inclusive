@@ -1,44 +1,59 @@
 import os
+import argparse
 import torch
 import torch.nn as nn
 import pandas as pd
 import settings
 from models import create_model
-from loader import get_test_loader, get_val2_loader
+from loader import get_test_loader, get_tuning_loader, get_train_val_loaders
+from metrics import find_threshold, f2_score
 from utils import get_classes
-from train import validate
 
-#threshold = 0.13
-batch_size = 512 #128
+def create_prediction_model(args):
+    model = create_model('resnet', args.layers, pretrained=not args.scratch, num_classes=args.end_index-args.start_index)
+    sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
+    model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best.pth')
+    if not os.path.exists(model_file):
+        raise ValueError('model file not exist: {}'.format(model_file))
+    print('model file: {}'.format(model_file))
+    model.load_state_dict(torch.load(model_file))
+    model = model.cuda()
 
-thresholds = [0.021, 0.591, 0.521, 0.001, 0.15, 0.031, 0.021, 0.001, 0.011, 0.041, 0.011, 0.001, 0.15, 0.561, 0.011, 0.011, 0.011, 0.001, 0.15, 0.15, 0.021, 0.421, 0.011, 0.15, 0.011, 0.15, 0.15, 0.181, 0.231, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.551, 0.15, 0.15, 0.15, 0.531, 0.15, 0.411, 0.15, 0.271, 0.15, 0.15, 0.07100000000000001, 0.15, 0.521, 0.491, 0.15, 0.581, 0.15, 0.15, 0.15, 0.551, 0.15, 0.15, 0.15, 0.15, 0.15, 0.581, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.341, 0.15, 0.15, 0.15, 0.481, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.421, 0.281, 0.15, 0.15, 0.15, 0.15]
+    return model
 
-classes = get_classes(settings.CLASSES_FILE)
+def find_best_thresholds(model, val_loader):
+    print('finding thresholds with validation data')
+    model.eval()
+    targets = None
+    outputs = None
+    with torch.no_grad():
+        for x, target in val_loader:
+            x, target = x.cuda(), target.cuda()
+            output = model(x)
+            if targets is None:
+                targets = target
+            else:
+                targets = torch.cat([targets, target])
+            if outputs is None:
+                outputs = output
+            else:
+                outputs = torch.cat([outputs, output])    
 
-def get_label_names(row):
-    assert len(row) == settings.N_CLASSES
+    best_th = find_threshold(outputs, targets)
+    #best_th[0] = 0.5
+    optimized_score = f2_score(targets, torch.sigmoid(outputs), threshold=torch.Tensor(best_th).cuda())
+    return best_th, optimized_score
+
+def get_label_names(row, classes):
+    assert len(row) == len(classes)
     label_names = [classes[i] for i in range(len(row)) if row[i] == 1]
     tmp = [classes[i] for i in range(len(row)) if row[i] != 0]
     assert len(tmp) == len(label_names)
     return ' '.join(label_names)
 
-def create_submission(predictions, outfile):
-    meta = pd.read_csv(settings.STAGE1_SAMPLE_SUB)
-    meta['labels'] = predictions
-    meta.to_csv('res34_optim_threshold.csv', index=False)
-
-def model_predict(model):
-    model_file = os.path.join(settings.MODEL_DIR, model.name, 'best.pth')
-    print('predicting...')
-    print('loading {}...'.format(model_file))
-    model.load_state_dict(torch.load(model_file))
-    model = model.cuda()
+def model_predict(args, model):
     model.eval()
-
-    #val2_loader = get_val2_loader(batch_size=batch_size)
-    #validate(model, nn.BCEWithLogitsLoss(), val2_loader, batch_size)
-
-    test_loader = get_test_loader(batch_size=batch_size, dev_mode=False)
+    test_loader = get_test_loader(args, batch_size=args.batch_size, dev_mode=False)
 
     outputs = None
     with torch.no_grad():
@@ -50,25 +65,44 @@ def model_predict(model):
                 outputs = output
             else:
                 outputs = torch.cat([outputs, output])
-            print('{}/{}'.format(batch_size*(i+1), test_loader.num), end='\r')
-            if i == 0:
-                break
+            print('{}/{}'.format(args.batch_size*(i+1), test_loader.num), end='\r')
 
+            #if i == 0:
+            #    break
+ 
     return outputs
 
-def predict():
-    model = create_model('resnet', 34, pretrained=True)
-    outputs = model_predict(model)
+def predict(args):
+    model = create_prediction_model(args)
+    _, val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
+    #val_loader = get_tuning_loader(args, batch_size=args.batch_size)
+
+    thresholds, tuning_f2 = find_best_thresholds(model, val_loader)
+    print(thresholds)
+    print('optimized tuning f2:', tuning_f2)
+
+    if args.val:
+        return
+
+    outputs = model_predict(args, model)
+
+    classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
 
     label_names = []
     pred = (outputs > torch.Tensor(thresholds).cuda()).byte().cpu().numpy()
     for row in pred:
-        label_names.append(get_label_names(row))
+        label_names.append(get_label_names(row, classes))
 
-    print(label_names)
+    #print(label_names)
 
-    #create_submission(label_names, 'sub_res34_th015_1.csv')
+    create_submission(label_names, args.out_file)
 
+def create_submission(predictions, outfile):
+    meta = pd.read_csv(settings.STAGE_1_SAMPLE_SUBMISSION)
+    meta['labels'] = predictions
+    meta.to_csv(outfile, index=False)
+
+'''
 def ensemble():
     outputs = []
     for layer in [18, 34, 50]:
@@ -84,8 +118,31 @@ def ensemble():
 
     #print(label_names)
     create_submission(label_names)
+'''
 
+def merge_dfs():
+    df1 = pd.read_csv('res34_optim_threshold.csv', index_col='image_id')
+    df1.columns = ['label1']
+    df2 = pd.read_csv('sub_res34_50_200.csv', index_col='image_id')
+    df2.columns = ['label2']
+    df3 = df1.join(df2)
+    df3['labels'] = df3.label1.astype(str).str.cat(df3.label2.astype(str), sep=' ')
+
+    print(df3.head())
+    df3.to_csv('merged_0_200_2.csv', columns=['labels'])
 
 if __name__ == '__main__':
-    predict()
-    #ensemble()
+    parser = argparse.ArgumentParser(description='Inclusive')
+    parser.add_argument('--batch_size', default=512, type=int, help='batch size')
+    parser.add_argument('--model_name', default='resnet', type=str, help='model name')
+    parser.add_argument('--layers', default=34, type=int, help='batch size')
+    parser.add_argument('--scratch',action='store_true', help='train from scratch')
+    parser.add_argument('--val',action='store_true', help='val only')
+    parser.add_argument('--cls_type', choices=['trainable', 'tuning'], type=str, required=True, help='class type')
+    parser.add_argument('--start_index', type=int, required=True, help='start index of classes')
+    parser.add_argument('--end_index', type=int, required=True, help='end index of classes')
+    parser.add_argument('--out_file', default='sub_res34_50_200.csv', type=str, help='submission file name')
+    args = parser.parse_args()
+
+    #predict(args)
+    merge_dfs()

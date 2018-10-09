@@ -45,7 +45,7 @@ def find_threshold(logits, targets):
     for i in range(N_CLASSESS):
         best_t = 0.15
         best_score = f2_score(targets, outputs, threshold=torch.Tensor(thresholds).cuda())
-        for t in range(60):
+        for t in range(99):
             cur_th = t/100.+0.001
             thresholds[i] = cur_th
             score = f2_score(targets, outputs, threshold=torch.Tensor(thresholds).cuda())

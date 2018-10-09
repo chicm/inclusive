@@ -36,7 +36,7 @@ def _generate_train_label(classes, output_file):
 def generate_train_labels():
     if not os.path.exists(settings.TRAIN_LABEL_DIR):
         os.makedirs(settings.TRAIN_LABEL_DIR)
-
+    
     top_classes, _ = get_classes('trainable', 0, 50)
     _generate_train_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_trainable_0_50.csv'))
     top_classes, _ = get_classes('trainable', 50, 200)
@@ -50,7 +50,7 @@ def generate_train_labels():
     _generate_train_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_tuning_0_100.csv'))
     top_classes, _ = get_classes('tuning', 100, 484)
     _generate_train_label(top_classes, os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_tuning_100_484.csv'))
-
+    
 
     #print(df.head())
     #print(df.shape)
@@ -140,9 +140,9 @@ def _generate_tuning_label(classes, out_file):
     labels = []
     for row in df_turning_labels.values:
         filtered_label = [x for x in row[1].split() if x in classes]
-        if len(filtered_label) > 0:
-            img_ids.append(row[0])
-            labels.append(' '.join(filtered_label))
+        #if len(filtered_label) > 0:
+        img_ids.append(row[0])
+        labels.append(' '.join(filtered_label))
     filtered_df = pd.DataFrame({'image_id': img_ids, 'labels': labels})
     filtered_df.to_csv(out_file, header=None, index=False)
 
@@ -215,7 +215,7 @@ if __name__ == '__main__':
     #check_train_count()
     #check_class_intersection()
     #generate_topk_class()
-    create_class_counts_df()
-    create_tuning_class_counts_df()
+    #create_class_counts_df()
+    #create_tuning_class_counts_df()
     create_tuning_labels()
     generate_train_labels()

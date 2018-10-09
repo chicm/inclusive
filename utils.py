@@ -17,12 +17,12 @@ def get_train_val_meta(cls_type, start_index, end_index):
     assert cls_type in ['trainable', 'tuning']
 
     meta_file_name = os.path.join(settings.TRAIN_LABEL_DIR, 'train_labels_{}_{}_{}.csv'.format(cls_type, start_index, end_index))
-    df_labels = pd.read_csv(meta_file_name)
+    df_labels = pd.read_csv(meta_file_name, na_filter=False)
     split_index = int(df_labels.shape[0] * 0.9)
 
     df_train = df_labels.iloc[:split_index]
 
-    val_end_index = split_index + 5000
+    val_end_index = split_index + 25000
     if df_labels.shape[0] < val_end_index:
         val_end_index = df_labels.shape[0]
 
@@ -39,7 +39,7 @@ def get_tuning_meta(cls_type, start_index, end_index):
     assert cls_type in ['trainable', 'tuning']
 
     meta_file_name = os.path.join(settings.TRAIN_LABEL_DIR, 'tuning_labels_{}_{}_{}.csv'.format(cls_type, start_index, end_index))
-    df_labels = pd.read_csv(meta_file_name, names=['ImageID', 'LabelName'])
+    df_labels = pd.read_csv(meta_file_name, names=['ImageID', 'LabelName'], na_filter=False)
     print(df_labels.shape)
     return df_labels
 
