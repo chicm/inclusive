@@ -5,6 +5,7 @@ import torch.utils.data as data
 from attrdict import AttrDict
 from torchvision import datasets, models, transforms
 from utils import get_classes, get_test_ids, get_train_val_meta, get_tuning_meta
+from balanced_sampler import BalancedSammpler
 from PIL import Image
 import settings
 
@@ -82,11 +83,16 @@ class ImageDataset(data.Dataset):
 def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=True):
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
     train_meta, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
-    if dev_mode:
-        train_meta = train_meta.iloc[:10]
-        val_meta = val_meta.iloc[:10]
+
+    sampler = BalancedSammpler(train_meta, classes, stoi)
+    df1 = train_meta.set_index('ImageID')
+    sampled_train_meta = df1.loc[sampler.img_ids]
+
+    #if dev_mode:
+    #    train_meta = train_meta.iloc[:10]
+    #    val_meta = val_meta.iloc[:10]
     img_dir = settings.TRAIN_IMG_DIR
-    train_set = ImageDataset(True, train_meta['ImageID'].values.tolist(), img_dir, classes, stoi, train_meta['LabelName'].values.tolist())
+    train_set = ImageDataset(True, sampled_train_meta.index.values.tolist(), img_dir, classes, stoi, sampled_train_meta['LabelName'].values.tolist())
     val_set = ImageDataset(False, val_meta['ImageID'].values.tolist(), img_dir, classes, stoi, val_meta['LabelName'].values.tolist())
 
     train_loader = data.DataLoader(train_set, batch_size=batch_size, shuffle=train_shuffle, num_workers=4, collate_fn=train_set.collate_fn, drop_last=True)
@@ -131,11 +137,13 @@ def get_test_loader(args, batch_size=8, dev_mode=False):
 
 def test_train_loader():
     args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 50})
-    loader, _ = get_train_val_loaders(args, dev_mode=True, batch_size=10)
+    loader, _ = get_train_val_loaders(args, dev_mode=False, batch_size=10)
     for i, data in enumerate(loader):
         imgs, targets = data
         print(targets)
         print(imgs.size(), targets.size())
+        if i > 0:
+            break
 
 def test_test_loader():
     args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 50})
@@ -157,8 +165,8 @@ def test_tuning_loader():
 
 
 if __name__ == '__main__':
-    test_test_loader()
-    test_tuning_loader()
+    #test_test_loader()
+    #test_tuning_loader()
     test_train_loader()
     #small_dict, img_ids = load_small_train_ids()
     #print(img_ids[:10])
