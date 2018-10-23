@@ -43,7 +43,7 @@ def find_fix_threshold(logits, targets):
     best_score = 0.
     outputs = torch.sigmoid(logits)
     
-    for t in range(1, 80):
+    for t in range(1, 70):
         cur_th = t/100.
         score = f2_score(targets, outputs, cur_th)
         if score > best_score:

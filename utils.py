@@ -55,6 +55,10 @@ def get_test_ids():
 def get_trainable_classes():
     return pd.read_csv(settings.CLASSES_TRAINABLE)['label_code'].values.tolist()
 
+def test_bbox():
+    df = pd.read_csv(settings.TRAIN_MACHINE_LABELS)
+    print(df['LabelName'].nunique())
+    print(df['ImageID'].nunique())
 
 if __name__ == '__main__':
     #get_classes()
@@ -63,7 +67,9 @@ if __name__ == '__main__':
     #get_class_converter()
     #get_test_ids()
     #pass
-    train_meta, val_meta = get_train_val_meta('trainable', 0,50)
+    test_bbox()
+
+    train_meta, val_meta = get_train_val_meta('trainable', 0, 250)
     print(train_meta.shape)
     print(train_meta.head())
     print(val_meta.shape)
