@@ -31,6 +31,7 @@ def _generate_train_label(classes, output_file):
 
     df = df_human_labels.groupby('ImageID')['LabelName'].apply(' '.join).reset_index()
     print('trainable images:', df.shape)
+    df = df.sort_values(['ImageID'])
     df = shuffle(df)
     print('shuffled trainable images:', df.shape)
     print('saving:', output_file)
