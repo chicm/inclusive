@@ -14,7 +14,8 @@ import pdb
 import settings
 from backbone_loader import get_train_val_loaders
 import cv2
-from net.senet import se_resnext50_32x4d, se_resnet50
+from models import create_backbone_model
+
 
 MODEL_DIR = settings.MODEL_DIR
 
@@ -66,26 +67,10 @@ def accuracy(output, label, topk=(1,5)):
     return res
 
 
-def create_model(args, num_classes=7272):
-    if args.pretrained:
-        basenet = se_resnext50_32x4d()
-        basenet.last_linear = nn.Linear(2048, num_classes)
-    else:
-        basenet = se_resnext50_32x4d(num_classes=num_classes, pretrained=None)
-
-    basenet.name = 'se_resnext50_32x4d'
-    return basenet
-
-def test_model():
-    x = torch.randn(2, 3, 256, 256).cuda()
-    model = create_model().cuda()
-    y = model(x)
-    print(y.size())
-
 def train(args):
     print('start training...')
 
-    model = create_model(args)
+    model = create_backbone_model(args.pretrained)
     if args.pretrained:
         model_file = os.path.join(MODEL_DIR, 'backbone', model.name, 'pretrained', 'best.pth')
     else:

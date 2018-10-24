@@ -9,20 +9,23 @@ from balanced_sampler import BalancedSammpler
 from PIL import Image
 import settings
 
+IMG_SZ = settings.IMG_SZ
+
 train_transforms = transforms.Compose([
-            transforms.Resize((256,256)),
-            transforms.RandomResizedCrop(224),
+            transforms.Resize((320,320)),
+            transforms.RandomResizedCrop(IMG_SZ, scale=(0.4, 1.0)),
             transforms.RandomHorizontalFlip(),
-            #transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
             transforms.ToTensor(),
             # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) imagenet mean and std
             transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890]) # open images mean and std
         ])
 test_transforms = transforms.Compose([
-            transforms.Resize((224,224)),
+            transforms.Resize((IMG_SZ,IMG_SZ)),
             transforms.ToTensor(),
             transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890])
         ])
+
 
 class ImageDataset(data.Dataset):
     def __init__(self, train_mode, img_ids, img_dir, classes, stoi, label_names=None):
@@ -84,9 +87,12 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
     train_meta, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
 
-    sampler = BalancedSammpler(train_meta, classes, stoi)
+    sampler = BalancedSammpler(train_meta, classes, stoi, min_label_num=500, max_label_num=700)
     df1 = train_meta.set_index('ImageID')
     sampled_train_meta = df1.loc[sampler.img_ids]
+
+    print(sampled_train_meta.shape)
+    val_meta = val_meta.iloc[:2000]
 
     #if dev_mode:
     #    train_meta = train_meta.iloc[:10]

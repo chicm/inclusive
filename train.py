@@ -13,36 +13,16 @@ import settings
 from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_fix_threshold
 from models import create_model, AttentionResNet
 
-def focal_loss(x, y):
-    '''Focal loss.
-
-    Args:
-    x: (tensor) sized [N,D].
-    y: (tensor) sized [N,].
-
-    Return:
-    (tensor) focal loss.
-        '''
-    alpha = 0.25
-    gamma = 2
-
-    #t = one_hot_embedding(y.data.cpu(), 1+self.num_classes)  # [N,21]
-    #t = t[:,1:]  # exclude background
-    #t = Variable(t).cuda()  # [N,20]
-    t = y
-
-    p = x.sigmoid()
-    pt = p*t + (1-p)*(1-t)         # pt = p if t > 0 else 1-p
-    w = alpha*t + (1-alpha)*(1-t)  # w = alpha if t > 0 else 1-alpha
-    w = w * (1-pt).pow(gamma)
-    #return F.binary_cross_entropy_with_logits(x, t, w, size_average=False)
-    return F.binary_cross_entropy_with_logits(x, y, w)
-
 
 def train(args):
-    model = create_model('resnet', args.layers, pretrained=not args.scratch, num_classes=args.end_index-args.start_index)
+    model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=True)
     sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
-    model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best.pth')
+
+    if args.pretrained:
+        model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best_pretrained.pth')
+    else:
+        model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best_scratch.pth')
+
     parent_dir = os.path.dirname(model_file)
     if not os.path.exists(parent_dir):
         os.makedirs(parent_dir)
@@ -86,7 +66,7 @@ def train(args):
     current_lr = get_lrs(optimizer) 
     for epoch in range(args.epochs):
         train_loss = 0
-        if epoch % 20 == 0:
+        if epoch > 0 and epoch % 20 == 0:
             train_loader, _ = get_train_val_loaders(args, batch_size=args.batch_size)
         for batch_idx, data in enumerate(train_loader):
             iteration += 1
@@ -183,7 +163,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
     parser.add_argument('--min_lr', default=1e-5, type=float, help='min learning rate')
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
-    parser.add_argument('--model_name', default='resnet', type=str, help='model name')
+    parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='backbone')
     parser.add_argument('--layers', default=34, type=int, help='batch size')
     parser.add_argument('--epochs', default=50, type=int, help='epochs')
     parser.add_argument('--iter_save', default=200, type=int, help='epochs')
@@ -193,14 +173,15 @@ if __name__ == '__main__':
     parser.add_argument('--start_index', default=0, type=int, help='start index of classes')
     parser.add_argument('--end_index', default=100, type=int, help='end index of classes')
     parser.add_argument('--no_score',action='store_true', help='do not calculate f2 score')
+    parser.add_argument('--pretrained',action='store_true',help='backbone use pretrained model')
     args = parser.parse_args()
 
     print(args)
 
-    log.basicConfig(
-        filename = 'trainlog.txt', 
-        format   = '%(asctime)s : %(message)s',
-        datefmt  = '%Y-%m-%d %H:%M:%S', 
-        level = log.INFO)
+    #log.basicConfig(
+    #    filename = 'trainlog.txt', 
+    #    format   = '%(asctime)s : %(message)s',
+    #    datefmt  = '%Y-%m-%d %H:%M:%S', 
+    #    level = log.INFO)
 
     train(args)

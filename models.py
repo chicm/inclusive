@@ -6,9 +6,41 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
 import net.resnet
+from net.senet import se_resnext50_32x4d, se_resnet50
 import settings
 
-def create_model(model_name, layers, pretrained, num_classes):
+
+def create_backbone_model(pretrained, num_classes=7272):
+    if pretrained:
+        basenet = se_resnext50_32x4d()
+        basenet.last_linear = nn.Linear(2048, num_classes)
+    else:
+        basenet = se_resnext50_32x4d(num_classes=num_classes, pretrained=None)
+
+    basenet.num_ftrs = 2048
+    basenet.name = 'se_resnext50_32x4d'
+    return basenet
+
+def create_model(backbone, pretrained, num_classes, load_backbone_weights=False):
+    
+    backbone = create_backbone_model(pretrained)
+    if pretrained:
+        model_file = os.path.join(settings.MODEL_DIR, 'backbone', backbone.name, 'pretrained', 'best.pth')
+    else:
+        model_file = os.path.join(settings.MODEL_DIR, 'backbone', backbone.name, 'scratch', 'best.pth')
+    
+    if load_backbone_weights:
+        print('loading {}...'.format(model_file))
+        backbone.load_state_dict(torch.load(model_file))
+
+    fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(backbone.num_ftrs, num_classes))
+    backbone.last_linear = fc
+
+    return backbone
+    '''
+
+    if backbone == 'se_resnext50_32x4d'
+
     if model_name == 'resnet' and pretrained:
         model, _ = create_pretrained_resnet(layers, num_classes)
         model.name = 'resnet_{}_{}'.format(layers, num_classes)
@@ -17,6 +49,7 @@ def create_model(model_name, layers, pretrained, num_classes):
         model.name = 'resnet_scratch_{}_{}'.format(layers, num_classes)
 
     return model
+    '''
 
 def create_resnet_model(layers, num_classes):
     if layers not in [18, 32, 34, 50, 101, 152]:
@@ -153,7 +186,7 @@ def test():
     #print(out)
 
 def test2():
-    model = create_model('resnet', 32, pretrained=False).cuda()
+    model = create_model('se_resnext50_32x4d', pretrained=False, num_classes=100, load_backbone_weights=False).cuda()
     x = torch.randn(2,3,128,128).cuda()
     y = model(x)
     print(y.size())
