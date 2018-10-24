@@ -76,6 +76,14 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
     train_meta, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
 
+    # filter, keep label counts <= 3
+    train_meta['counts'] = train_meta['LabelName'].map(lambda x: len(x.split()))
+    val_meta['counts'] = val_meta['LabelName'].map(lambda x: len(x.split()))
+    train_meta = train_meta[train_meta['counts'] <= 3]
+    val_meta = val_meta[val_meta['counts'] <= 3].iloc[:6000]
+
+    print(train_meta.shape, val_meta.shape)
+
     df_class_counts = pd.read_csv(settings.SORTED_CLASSES_TRAINABLE)
 
     if dev_mode:
@@ -85,7 +93,7 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     img_dir = settings.TRAIN_IMG_DIR
     
     train_set = ImageDataset(True, train_meta['ImageID'].values.tolist(), img_dir, classes, stoi, df_class_counts, train_meta['LabelName'].values.tolist())
-    val_set = ImageDataset(False, val_meta['ImageID'].values[:10000].tolist(), img_dir, classes, stoi, df_class_counts, val_meta['LabelName'].values.tolist())
+    val_set = ImageDataset(False, val_meta['ImageID'].values.tolist(), img_dir, classes, stoi, df_class_counts, val_meta['LabelName'].values.tolist())
 
     train_loader = data.DataLoader(train_set, batch_size=batch_size, shuffle=train_shuffle, num_workers=4)#, collate_fn=train_set.collate_fn, drop_last=True)
     train_loader.num = train_set.num
