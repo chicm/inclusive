@@ -32,7 +32,7 @@ def _generate_train_label(classes, output_file):
     df = df_human_labels.groupby('ImageID')['LabelName'].apply(' '.join).reset_index()
     print('trainable images:', df.shape)
     df = df.sort_values(['ImageID'])
-    df = shuffle(df)
+    df = shuffle(df, random_state=1234)
     print('shuffled trainable images:', df.shape)
     print('saving:', output_file)
     df.to_csv(output_file, index=False)
