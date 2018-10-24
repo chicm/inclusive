@@ -165,7 +165,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
     parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='backbone')
     parser.add_argument('--layers', default=34, type=int, help='batch size')
-    parser.add_argument('--epochs', default=50, type=int, help='epochs')
+    parser.add_argument('--epochs', default=1000, type=int, help='epochs')
     parser.add_argument('--iter_save', default=200, type=int, help='epochs')
     parser.add_argument('--scratch',action='store_true', help='pretrained')
     parser.add_argument('--val',action='store_true', help='val only')
