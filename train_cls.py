@@ -45,10 +45,12 @@ def focal_loss(x, y):
     #return F.binary_cross_entropy_with_logits(x, t, w, size_average=False)
     return F.binary_cross_entropy_with_logits(x, t, w)
 
-def criterion(outputs, targets):
-    #c = nn.CrossEntropyLoss()
-    loss = focal_loss(outputs, targets)
-    return loss
+def criterion(args, outputs, targets):
+    c = nn.CrossEntropyLoss()
+    if args.focal_loss:
+        return focal_loss(outputs, targets)
+    else:
+        return c(outputs, targets)
 
 def accuracy(output, label, topk=(1,5)):
     maxk = max(topk)
@@ -135,7 +137,7 @@ def train(args):
             optimizer.zero_grad()
             output = model(img)
             
-            loss = criterion(output, target)
+            loss = criterion(args, output, target)
             loss.backward()
  
             optimizer.step()
@@ -188,7 +190,7 @@ def validate(args, model, val_loader, epoch=0, threshold=0.5, cls_threshold=0.5)
         for img, target in val_loader:
             img, target = img.cuda(), target.cuda()
             output = model(img)
-            loss  = criterion(output, target)
+            loss  = criterion(args, output, target)
             ship_loss += loss.item()
 
             #preds = output.max(1, keepdim=True)[1]
@@ -224,7 +226,8 @@ if __name__ == '__main__':
     parser.add_argument('--cls_type', choices=['trainable', 'tuning'], type=str, default='trainable', help='train class type')
     parser.add_argument('--start_index', default=0, type=int, help='start index of classes')
     parser.add_argument('--end_index', default=7272, type=int, help='end index of classes')
-    parser.add_argument('--max_labels', default=1, type=int, help='filter max labels')
+    parser.add_argument('--max_labels', default=3, type=int, help='filter max labels')
+    parser.add_argument('--focal_loss', action='store_true')
     #parser.add_argument('--img_sz', default=256, type=int, help='image size')
     
     args = parser.parse_args()
