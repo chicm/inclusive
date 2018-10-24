@@ -82,7 +82,7 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     train_meta['counts'] = train_meta['LabelName'].map(lambda x: len(x.split()))
     val_meta['counts'] = val_meta['LabelName'].map(lambda x: len(x.split()))
     train_meta = train_meta[train_meta['counts'] <= args.max_labels]
-    val_meta = val_meta[val_meta['counts'] <= 3].iloc[:6000]
+    val_meta = val_meta[val_meta['counts'] <= args.max_labels].iloc[:6000]
 
     print(train_meta.shape, val_meta.shape)
 
