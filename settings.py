@@ -4,7 +4,7 @@ import local_settings
 DATA_DIR = local_settings.DATA_DIR
 TRAIN_IMG_DIR = local_settings.TRAIN_IMG_DIR
 
-IMG_SZ = 224
+IMG_SZ = 256
 
 MODEL_DIR = os.path.join(DATA_DIR, 'models')
 TRAIN_LABEL_DIR = os.path.join(DATA_DIR, 'gen')

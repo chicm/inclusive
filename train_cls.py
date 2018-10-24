@@ -18,7 +18,37 @@ from net.senet import se_resnext50_32x4d, se_resnet50
 
 MODEL_DIR = settings.MODEL_DIR
 
-def accuracy(output, label, topk=(1,10)):
+def focal_loss(x, y):
+    '''Focal loss.
+
+    Args:
+    x: (tensor) sized [N,D].
+    y: (tensor) sized [N,].
+
+    Return:
+    (tensor) focal loss.
+        '''
+    alpha = 0.25
+    gamma = 2
+
+    #t = one_hot_embedding(y.data.cpu(), 1+self.num_classes)  # [N,21]
+    #t = t[:,1:]  # exclude background
+    #t = Variable(t).cuda()  # [N,20]
+    t = y
+
+    p = x.sigmoid()
+    pt = p*t + (1-p)*(1-t)         # pt = p if t > 0 else 1-p
+    w = alpha*t + (1-alpha)*(1-t)  # w = alpha if t > 0 else 1-alpha
+    w = w * (1-pt).pow(gamma)
+    #return F.binary_cross_entropy_with_logits(x, t, w, size_average=False)
+    return F.binary_cross_entropy_with_logits(x, y, w)
+
+def criterion(outputs, targets):
+    c = nn.CrossEntropyLoss()
+    #return focal_loss(outputs, targets)
+    return c(outputs, targets)
+
+def accuracy(output, label, topk=(1,5)):
     maxk = max(topk)
 
     _, pred = output.topk(maxk, 1, True, True)
@@ -85,8 +115,6 @@ def train(args):
 
     model.train()
 
-    criterion = nn.CrossEntropyLoss()
-
     if args.lrs == 'plateau':
         lr_scheduler.step(best_iout)
     else:
@@ -150,7 +178,6 @@ def validate(args, model, val_loader, epoch=0, threshold=0.5, cls_threshold=0.5)
     #return [0]*7
     model.eval()
     #print('validating...')
-    criterion = nn.CrossEntropyLoss()
 
     total_num = 0
     corrects = 0
@@ -164,8 +191,8 @@ def validate(args, model, val_loader, epoch=0, threshold=0.5, cls_threshold=0.5)
 
             #preds = output.max(1, keepdim=True)[1]
             #corrects += preds.eq(target.view_as(preds)).sum().item()
-            _, top10 = accuracy(output, target)
-            corrects += top10
+            _, top5 = accuracy(output, target)
+            corrects += top5
             total_num += len(img)
             
     cls_acc = corrects / total_num
@@ -195,6 +222,7 @@ if __name__ == '__main__':
     parser.add_argument('--cls_type', choices=['trainable', 'tuning'], type=str, default='trainable', help='train class type')
     parser.add_argument('--start_index', default=0, type=int, help='start index of classes')
     parser.add_argument('--end_index', default=7272, type=int, help='end index of classes')
+    parser.add_argument('--max_labels', default=1, type=int, help='filter max labels')
     #parser.add_argument('--img_sz', default=256, type=int, help='image size')
     
     args = parser.parse_args()

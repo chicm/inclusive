@@ -10,17 +10,19 @@ from balanced_sampler import BalancedSammpler
 from PIL import Image
 import settings
 
+IMG_SZ = settings.IMG_SZ
+
 train_transforms = transforms.Compose([
-            transforms.Resize((256,256)),
-            transforms.RandomResizedCrop(224),
+            transforms.Resize((320,320)),
+            transforms.RandomResizedCrop(IMG_SZ, scale=(0.4, 1.0)),
             transforms.RandomHorizontalFlip(),
-            #transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
             transforms.ToTensor(),
             # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) imagenet mean and std
             transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890]) # open images mean and std
         ])
 test_transforms = transforms.Compose([
-            transforms.Resize((224,224)),
+            transforms.Resize((IMG_SZ,IMG_SZ)),
             transforms.ToTensor(),
             transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890])
         ])
@@ -76,10 +78,10 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
     train_meta, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
 
-    # filter, keep label counts <= 3
+    # filter, keep label counts <= args.max_labels
     train_meta['counts'] = train_meta['LabelName'].map(lambda x: len(x.split()))
     val_meta['counts'] = val_meta['LabelName'].map(lambda x: len(x.split()))
-    train_meta = train_meta[train_meta['counts'] <= 3]
+    train_meta = train_meta[train_meta['counts'] <= args.max_labels]
     val_meta = val_meta[val_meta['counts'] <= 3].iloc[:6000]
 
     print(train_meta.shape, val_meta.shape)
