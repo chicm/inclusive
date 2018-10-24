@@ -12,7 +12,7 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, _LRSchedu
 from torchvision.models import resnet34
 import pdb
 import settings
-from single_class_loader import get_train_val_loaders
+from backbone_loader import get_train_val_loaders
 import cv2
 from net.senet import se_resnext50_32x4d, se_resnet50
 
@@ -66,8 +66,13 @@ def accuracy(output, label, topk=(1,5)):
     return res
 
 
-def create_model():
-    basenet = se_resnext50_32x4d(num_classes=7272, pretrained=None)
+def create_model(args, num_classes=7272):
+    if args.pretrained:
+        basenet = se_resnext50_32x4d()
+        basenet.last_linear = nn.Linear(2048, num_classes)
+    else:
+        basenet = se_resnext50_32x4d(num_classes=num_classes, pretrained=None)
+
     basenet.name = 'se_resnext50_32x4d'
     return basenet
 
@@ -80,8 +85,11 @@ def test_model():
 def train(args):
     print('start training...')
 
-    model = create_model()
-    model_file = os.path.join(MODEL_DIR, 'classifier', model.name, 'best.pth')
+    model = create_model(args)
+    if args.pretrained:
+        model_file = os.path.join(MODEL_DIR, 'backbone', model.name, 'pretrained', 'best.pth')
+    else:
+        model_file = os.path.join(MODEL_DIR, 'backbone', model.name, 'scratch', 'best.pth')
 
     parent_dir = os.path.dirname(model_file)
     if not os.path.exists(parent_dir):
@@ -228,6 +236,7 @@ if __name__ == '__main__':
     parser.add_argument('--end_index', default=7272, type=int, help='end index of classes')
     parser.add_argument('--max_labels', default=3, type=int, help='filter max labels')
     parser.add_argument('--focal_loss', action='store_true')
+    parser.add_argument('--pretrained', action='store_true')
     #parser.add_argument('--img_sz', default=256, type=int, help='image size')
     
     args = parser.parse_args()
