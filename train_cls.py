@@ -34,19 +34,21 @@ def focal_loss(x, y):
     #t = one_hot_embedding(y.data.cpu(), 1+self.num_classes)  # [N,21]
     #t = t[:,1:]  # exclude background
     #t = Variable(t).cuda()  # [N,20]
-    t = y
+
+    t = torch.eye(7272).cuda()
+    t = t.index_select(0, y)
 
     p = x.sigmoid()
     pt = p*t + (1-p)*(1-t)         # pt = p if t > 0 else 1-p
     w = alpha*t + (1-alpha)*(1-t)  # w = alpha if t > 0 else 1-alpha
     w = w * (1-pt).pow(gamma)
     #return F.binary_cross_entropy_with_logits(x, t, w, size_average=False)
-    return F.binary_cross_entropy_with_logits(x, y, w)
+    return F.binary_cross_entropy_with_logits(x, t, w)
 
 def criterion(outputs, targets):
-    c = nn.CrossEntropyLoss()
-    #return focal_loss(outputs, targets)
-    return c(outputs, targets)
+    #c = nn.CrossEntropyLoss()
+    loss = focal_loss(outputs, targets)
+    return loss
 
 def accuracy(output, label, topk=(1,5)):
     maxk = max(topk)
