@@ -9,6 +9,7 @@ from utils import get_classes, get_test_ids, get_train_val_meta, get_tuning_meta
 from balanced_sampler import BalancedSammpler
 from PIL import Image
 from sklearn.utils import shuffle
+import random
 import settings
 
 IMG_SZ = settings.IMG_SZ
@@ -72,7 +73,11 @@ class ImageDataset(data.Dataset):
     def get_label(self, index):
         label_codes = [x for x in self.label_names[index].strip().split() if x in self.classes]
         label_counts = [self.df_class_counts.loc[x]['counts'] for x in label_codes]
-        return self.stoi[label_codes[np.argmin(label_counts)]]
+        if self.train_mode:
+            random.seed(hash(self.img_ids[index]))
+            return self.stoi[label_codes[int(random.random()*len(label_codes))]] # random select for train
+        else:
+            return self.stoi[label_codes[np.argmin(label_counts)]] # select rare label as target for validation
 
 
 def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=True):
