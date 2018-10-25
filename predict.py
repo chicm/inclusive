@@ -10,12 +10,17 @@ from metrics import find_threshold, f2_score, find_fix_threshold, f2_scores
 from utils import get_classes
 
 def create_prediction_model(args):
-    model = create_model('resnet', args.layers, pretrained=not args.scratch, num_classes=args.end_index-args.start_index)
+    model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=False)
     sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
-    model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best.pth')
+
+    if args.pretrained:
+        model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best_pretrained.pth')
+    else:
+        model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best_scratch.pth')
+
     if not os.path.exists(model_file):
-        raise ValueError('model file not exist: {}'.format(model_file))
-    print('model file: {}'.format(model_file))
+        raise ValueError('model file {} does not exist'.format(model_file))
+    print('loading {}...'.format(model_file))
     model.load_state_dict(torch.load(model_file))
     model = model.cuda()
 
@@ -77,7 +82,7 @@ def model_predict(args, model, check):
     return outputs
 
 def predict(args):
-    model = create_prediction_model(args)
+    '''
     #_, val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
     val_loader = get_tuning_loader(args, batch_size=args.batch_size)
 
@@ -93,13 +98,15 @@ def predict(args):
 
     if args.val:
         return
+    '''
 
+    model = create_prediction_model(args)
     outputs = model_predict(args, model, args.check)
 
     classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
 
     label_names = []
-    pred = (outputs > pred_th).byte().cpu().numpy()
+    pred = (outputs > 0.2).byte().cpu().numpy()
     for row in pred:
         label_names.append(get_label_names(row, classes))
 
@@ -128,16 +135,14 @@ def merge_dfs():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inclusive')
-    parser.add_argument('--batch_size', default=512, type=int, help='batch size')
-    parser.add_argument('--model_name', default='resnet', type=str, help='model name')
-    parser.add_argument('--layers', default=34, type=int, help='batch size')
-    parser.add_argument('--scratch',action='store_true', help='train from scratch')
-    parser.add_argument('--val',action='store_true', help='val only')
+    parser.add_argument('--batch_size', default=256, type=int, help='batch size')
+    parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='model name')
+    parser.add_argument('--pretrained',action='store_true', help='val only')
     parser.add_argument('--check',action='store_true', help='check only')
-    parser.add_argument('--cls_type', choices=['trainable', 'tuning'], type=str, required=True, help='class type')
-    parser.add_argument('--start_index', type=int, required=True, help='start index of classes')
-    parser.add_argument('--end_index', type=int, required=True, help='end index of classes')
-    parser.add_argument('--out_file', default='sub_res34_0_100_optimize_tuning.csv', type=str, help='submission file name')
+    parser.add_argument('--cls_type',  default='trainable', choices=['trainable', 'tuning'], type=str, help='class type')
+    parser.add_argument('--start_index', type=int, default=0, help='start index of classes')
+    parser.add_argument('--end_index', type=int, default=100, help='end index of classes')
+    parser.add_argument('--out_file', default='sub_0_100_trainable_020.csv', type=str, help='submission file name')
     args = parser.parse_args()
 
     predict(args)
