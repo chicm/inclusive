@@ -30,16 +30,17 @@ test_transforms = transforms.Compose([
         ])
 
 class ImageDataset(data.Dataset):
-    def __init__(self, train_mode, img_ids, img_dir, classes, stoi, df_class_counts, label_names):
+    def __init__(self, train_mode, img_ids, img_dir, classes, stoi, df_class_counts=None, label_names=None):
         self.input_size = settings.IMG_SZ
         self.train_mode = train_mode
         self.img_ids = img_ids
         self.img_dir = img_dir
         self.num = len(img_ids)
-        self.label_names = label_names
         self.classes = classes 
         self.stoi = stoi
-        self.df_class_counts = df_class_counts.set_index('label_code')
+        self.label_names = label_names
+        if label_names is not None:
+            self.df_class_counts = df_class_counts.set_index('label_code')
 
     def __getitem__(self, index):
         fn = os.path.join(self.img_dir, '{}.jpg'.format(self.img_ids[index]))
@@ -52,15 +53,16 @@ class ImageDataset(data.Dataset):
         else:
             img = test_transforms(img)
 
-        return img, self.get_label(index)
+        if self.label_names is None:
+            return img
+        else:
+            return img, self.get_label(index)
 
     def __len__(self):
         return self.num
 
     def collate_fn(self, batch):
         imgs = [x[0] for x in batch]
-        labels = [x[1] for x in batch]
-
         h = w = self.input_size
         num_imgs = len(imgs)
         inputs = torch.zeros(num_imgs, 3, h, w)
@@ -68,7 +70,11 @@ class ImageDataset(data.Dataset):
         for i in range(num_imgs):
             inputs[i] = imgs[i]
 
-        return inputs, torch.tensor(labels)
+        if self.label_names is None:
+            return inputs
+        else:
+            labels = [x[1] for x in batch]
+            return inputs, torch.tensor(labels)
 
     def get_label(self, index):
         label_codes = [x for x in self.label_names[index].strip().split() if x in self.classes]
@@ -112,9 +118,23 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
 
     return train_loader, val_loader
 
+def get_test_loader(args, batch_size=8, dev_mode=False):
+    img_ids = get_test_ids()
+    classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
+
+    img_dir = settings.TEST_IMG_DIR
+    if dev_mode:
+        img_ids = img_ids[:10]
+        batch_size = 4
+    
+    dset = ImageDataset(False, img_ids, img_dir, classes, stoi)
+    dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=dset.collate_fn, drop_last=False)
+    dloader.num = dset.num
+    dloader.img_ids = img_ids
+    return dloader
 
 def test_train_loader():
-    args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 7172})
+    args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 7172, 'max_labels': 3})
     loader, _ = get_train_val_loaders(args, dev_mode=True, batch_size=10)
     for i, data in enumerate(loader):
         imgs, targets = data
@@ -123,10 +143,17 @@ def test_train_loader():
         if i > 0:
             break
 
+def test_test_loader():
+    args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 7172, 'max_labels': 3})
+    loader = get_test_loader(args, dev_mode=True, batch_size=10)
+    for i, data in enumerate(loader):
+        imgs = data
+        print(imgs.size())
+        if i > 0:
+            break
+
 
 if __name__ == '__main__':
-    #test_test_loader()
-    #test_tuning_loader()
-    test_train_loader()
-    #small_dict, img_ids = load_small_train_ids()
-    #print(img_ids[:10])
+    test_test_loader()
+    #test_train_loader()
+    

@@ -1,6 +1,7 @@
 import os
 import argparse
 import numpy as np
+import pandas as pd
 import logging as log
 import time
 
@@ -12,9 +13,10 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, _LRSchedu
 from torchvision.models import resnet34
 import pdb
 import settings
-from backbone_loader import get_train_val_loaders
+from backbone_loader import get_train_val_loaders, get_test_loader
 import cv2
 from models import create_backbone_model
+from utils import get_classes
 
 
 MODEL_DIR = settings.MODEL_DIR
@@ -66,10 +68,7 @@ def accuracy(output, label, topk=(1,5)):
         res.append(correct_k)
     return res
 
-
-def train(args):
-    print('start training...')
-
+def create_model(args, prediction=False):
     model = create_backbone_model(args.pretrained)
     if args.pretrained:
         model_file = os.path.join(MODEL_DIR, 'backbone', model.name, 'pretrained', 'best.pth')
@@ -87,7 +86,14 @@ def train(args):
     if os.path.exists(CKP):
         print('loading {}...'.format(CKP))
         model.load_state_dict(torch.load(CKP))
+    elif prediction:
+        raise ValueError('model file not exist')
     model = model.cuda()
+    return model, model_file
+
+def train(args):
+    print('start training...')
+    model, model_file = create_model(args)
 
     if args.optim == 'Adam':
         optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.001)
@@ -101,12 +107,15 @@ def train(args):
     else:
         lr_scheduler = CosineAnnealingLR(optimizer, args.t_max, eta_min=args.min_lr)
     #ExponentialLR(optimizer, 0.9, last_epoch=-1) #CosineAnnealingLR(optimizer, 15, 1e-7) 
+    best_cls_acc = 0.
 
     print('epoch |   lr    |   %        |  loss  |  avg   | f loss | lovaz  |  bce   |  cls   |  iou   | iout   |  best  | time | save |  acc   |')
 
-    best_iout, _iou, _f, _l, _b, _ship, best_cls_acc = validate(args, model, val_loader, args.start_epoch)
-    print('val   |         |            |        |        | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} |      |      | {:.4f} |'.format(
-        _f, _l, _b, _ship, _iou, best_iout, best_cls_acc, best_cls_acc))
+    if not args.no_first_val:
+        best_iout, _iou, _f, _l, _b, _ship, best_cls_acc = validate(args, model, val_loader, args.start_epoch)
+        print('val   |         |            |        |        | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} |      |      | {:.4f} |'.format(
+            _f, _l, _b, _ship, _iou, best_iout, best_cls_acc, best_cls_acc))
+
     if args.val:
         return
 
@@ -197,7 +206,43 @@ def validate(args, model, val_loader, epoch=0, threshold=0.5, cls_threshold=0.5)
 
     return 0, 0, 0, 0, ship_loss / n_batches, ship_loss/ n_batches, cls_acc
 
+def create_submission(args, predictions, outfile):
+    meta = pd.read_csv(settings.STAGE_1_SAMPLE_SUBMISSION)
+    if args.dev_mode:
+        meta = meta.iloc[:len(predictions)]  # for dev mode
+    meta['labels'] = predictions
+    meta.to_csv(outfile, index=False)
 
+def predict(args):
+    model, _ = create_model(args, prediction=True)
+    model.eval()
+    test_loader = get_test_loader(args, batch_size=args.batch_size, dev_mode=args.dev_mode)
+
+    preds = None
+    with torch.no_grad():
+        for i, x in enumerate(test_loader):
+            x = x.cuda()
+            output = torch.sigmoid(model(x))
+            output = F.softmax(output, dim=1)
+            _, pred = output.topk(3, 1, True, True)
+
+            if preds is None:
+                preds = pred.cpu()
+            else:
+                preds = torch.cat([preds, pred.cpu()], 0)
+            print('{}/{}'.format(args.batch_size*(i+1), test_loader.num), end='\r')
+
+    classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
+    label_names = []
+    preds = preds.numpy()
+    print(preds.shape)
+    for row in preds:
+        label_names.append(' '.join([classes[i] for i in row]))
+    if args.dev_mode:
+        print(len(label_names))
+        print(label_names)
+
+    create_submission(args, label_names, args.sub_file)
 
 if __name__ == '__main__':
     
@@ -222,11 +267,15 @@ if __name__ == '__main__':
     parser.add_argument('--max_labels', default=3, type=int, help='filter max labels')
     parser.add_argument('--focal_loss', action='store_true')
     parser.add_argument('--pretrained', action='store_true')
+    parser.add_argument('--predict', action='store_true')
+    parser.add_argument('--sub_file', default='sub_backbone_1.csv', help='optimizer')
+    parser.add_argument('--no_first_val', action='store_true')
     #parser.add_argument('--img_sz', default=256, type=int, help='image size')
     
     args = parser.parse_args()
     print(args)
 
-    train(args)
-    #pred_class(args)
-    #test_model()
+    if args.predict:
+        predict(args)
+    else:
+        train(args)

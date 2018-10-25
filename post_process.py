@@ -20,6 +20,12 @@ def concat_sub(sub_file1, sub_file2, out_file):
     df3['labels'] = new_labels
     df3.to_csv(out_file, index=False)
 
+def test1():
+    df = pd.read_csv('sub_backbone_1.csv')
+    df['labels'] = '/m/01g317 ' + df['labels']
+    print(df.head())
+    df.to_csv('sub_backbone_2.csv', index=False)
+
 def convert_model():
     res50 = create_resnet_model(50)
     res50.load_state_dict(torch.load(os.path.join(settings.MODEL_DIR, 'res50', 'best_lb029.pth')))
@@ -31,4 +37,5 @@ def convert_model():
 
 if __name__ == '__main__':
     #concat_sub('sub1.csv', 'sub1_naive.csv', 'merged1.csv')
-    convert_model()
+    #convert_model()
+    test1()
