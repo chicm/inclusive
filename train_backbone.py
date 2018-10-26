@@ -15,7 +15,7 @@ import pdb
 import settings
 from backbone_loader import get_train_val_loaders, get_test_loader
 import cv2
-from models import create_backbone_model
+from models import create_backbone_model, InclusiveNet
 from utils import get_classes
 
 
@@ -69,7 +69,8 @@ def accuracy(output, label, topk=(1,5)):
     return res
 
 def create_model(args, prediction=False):
-    model = create_backbone_model(args.pretrained)
+    #model = create_backbone_model(args.pretrained)
+    model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained)
     if args.pretrained:
         model_file = os.path.join(MODEL_DIR, 'backbone', model.name, 'pretrained', 'best.pth')
     else:
@@ -83,6 +84,7 @@ def create_model(args, prediction=False):
         CKP = args.init_ckp
     else:
         CKP = model_file
+    print('{}, exist: {}'.format(CKP, os.path.exists(CKP)))
     if os.path.exists(CKP):
         print('loading {}...'.format(CKP))
         model.load_state_dict(torch.load(CKP))
@@ -137,7 +139,7 @@ def train(args):
             img, target = data
             img, target = img.cuda(), target.cuda()
             optimizer.zero_grad()
-            output = model(img)
+            output, obj_num = model(img)
             
             loss = criterion(args, output, target)
             loss.backward()
@@ -191,7 +193,7 @@ def validate(args, model, val_loader, epoch=0, threshold=0.5, cls_threshold=0.5)
     with torch.no_grad():
         for img, target in val_loader:
             img, target = img.cuda(), target.cuda()
-            output = model(img)
+            output, _ = model(img)
             loss  = criterion(args, output, target)
             ship_loss += loss.item()
 
@@ -247,6 +249,7 @@ def predict(args):
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Ship detection')
+    parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='backbone')
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
     parser.add_argument('--min_lr', default=0.0001, type=float, help='min learning rate')
     parser.add_argument('--batch_size', default=64, type=int, help='batch_size')
