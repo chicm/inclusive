@@ -71,7 +71,7 @@ def train(args):
     current_lr = get_lrs(optimizer) 
     for epoch in range(args.epochs):
         train_loss = 0
-        if epoch > 0 and epoch % 20 == 0:
+        if epoch > 0 and epoch % 4 == 0:
             train_loader, _ = get_train_val_loaders(args, batch_size=args.batch_size)
         for batch_idx, data in enumerate(train_loader):
             iteration += 1
