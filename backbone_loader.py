@@ -95,7 +95,8 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     val_meta['counts'] = val_meta['LabelName'].map(lambda x: len(x.split()))
     train_meta = train_meta[train_meta['counts'] <= args.max_labels]
     val_meta = val_meta[val_meta['counts'] <= args.max_labels]
-    val_meta = shuffle(val_meta, random_state=1234).iloc[:3000]
+    #print(val_meta['LabelName'].str.split().apply(pd.Series).stack().nunique())
+    val_meta = shuffle(val_meta, random_state=1234).iloc[:5000]
 
     print(train_meta.shape, val_meta.shape)
 
@@ -134,7 +135,7 @@ def get_test_loader(args, batch_size=8, dev_mode=False):
     return dloader
 
 def test_train_loader():
-    args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 7172, 'max_labels': 3})
+    args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 7172, 'max_labels': 5})
     loader, _ = get_train_val_loaders(args, dev_mode=True, batch_size=10)
     for i, data in enumerate(loader):
         imgs, targets = data
@@ -154,6 +155,5 @@ def test_test_loader():
 
 
 if __name__ == '__main__':
-    test_test_loader()
-    #test_train_loader()
-    
+    #test_test_loader()
+    test_train_loader()

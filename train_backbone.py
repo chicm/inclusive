@@ -257,7 +257,7 @@ if __name__ == '__main__':
     parser.add_argument('--lrs', default='plateau', choices=['cosine', 'plateau'], help='LR sceduler')
     parser.add_argument('--patience', default=6, type=int, help='lr scheduler patience')
     parser.add_argument('--factor', default=0.5, type=float, help='lr scheduler factor')
-    parser.add_argument('--t_max', default=15, type=int, help='lr scheduler patience')
+    parser.add_argument('--t_max', default=12, type=int, help='lr scheduler patience')
     parser.add_argument('--init_ckp', default=None, type=str, help='resume from checkpoint path')
     parser.add_argument('--val', action='store_true')
     parser.add_argument('--dev_mode', action='store_true')
