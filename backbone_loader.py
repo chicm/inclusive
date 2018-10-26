@@ -80,7 +80,7 @@ class ImageDataset(data.Dataset):
         label_codes = [x for x in self.label_names[index].strip().split() if x in self.classes]
         label_counts = [self.df_class_counts.loc[x]['counts'] for x in label_codes]
         if self.train_mode:
-            random.seed(hash(self.img_ids[index]))
+            #random.seed(hash(self.img_ids[index]))
             return self.stoi[label_codes[int(random.random()*len(label_codes))]] # random select for train
         else:
             return self.stoi[label_codes[np.argmin(label_counts)]] # select rare label as target for validation
