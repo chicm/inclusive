@@ -138,7 +138,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def features(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -152,6 +152,10 @@ class ResNet(nn.Module):
         x = F.dropout2d(x, p=0.3)
         x = self.layer4(x)
         x = F.dropout2d(x, p=0.4)
+        return x
+
+    def forward(self, x):
+        x = self.features(x)
 
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
@@ -238,7 +242,7 @@ def resnet152(pretrained=False, **kwargs):
     return model
 
 if __name__ == '__main__':
-    res32 = resnet32(num_classes=100).cuda()
+    res32 = resnet34(True).cuda()
     x = torch.randn(2,3,256,256).cuda()
     y = res32(x)
     print(y.size())

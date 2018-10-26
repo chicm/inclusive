@@ -3,9 +3,10 @@ from sklearn.utils import shuffle
 from utils import get_tuning_meta, get_classes, get_train_val_meta
 
 class BalancedSammpler():
-    def __init__(self, meta, classes, stoi, min_label_num=100, max_label_num=150):
+    def __init__(self, meta, classes, stoi, balanced=True, min_label_num=500, max_label_num=800):
         self.meta = meta
         self.classes = classes
+        self.class_set = set(classes)
         self.stoi = stoi
         self.num = meta.shape[0]
         self.min_label_num = min_label_num
@@ -17,11 +18,20 @@ class BalancedSammpler():
         self.class_counts = [0] * self.n_classes
         self.img_ids = []
         self.full_classes = set()
-        self.add_images()
+
+        if balanced:
+            self.add_images_balanced()
+        else:
+            self.add_filtered_images()
         #print(self.class_counts)
+    def add_filtered_images(self):
+        meta = shuffle(self.meta)
+        for row in meta.values:
+            if len(self.get_label_indices(row[1])) > 0:
+                self.img_ids.append(row[0])
 
     def get_label_indices(self, label_names):
-        return [self.stoi[x] for x in label_names.strip().split() if x in self.classes]
+        return [self.stoi[x] for x in label_names.strip().split() if x in self.class_set]
         #target = [ (1 if i in label_idx else 0) for i in range(len(self.classes))]
 
     def check_max_label_counts(self, label_indicies, rounds):
@@ -37,10 +47,11 @@ class BalancedSammpler():
                 return False
         return True
 
-    def add_images(self, max_rounds = 20):
+    def add_images_balanced(self, max_rounds = 20):
         rounds = 0
         #print('sampling...')
         while len(self.full_classes) < self.n_classes:
+            #print('rounds:', rounds)
             #print('.', end='')
             # row[0]: image_id, row[1]: labels
             
@@ -77,12 +88,12 @@ class BalancedSammpler():
                 break
 
 if __name__ == '__main__':
-    classes, stoi = get_classes('trainable', 0, 50)
-    meta, _ = get_train_val_meta('trainable', 0, 50)
+    classes, stoi = get_classes('trainable', 0, 500)
+    meta, _ = get_train_val_meta('trainable', 0, 500)
     #print(meta.head())
     #print(meta.shape)
     
-    sampler = BalancedSammpler(meta, classes, stoi)
+    sampler = BalancedSammpler(meta, classes, stoi, balanced=True)
 
     #print(len(sampler.img_ids))
     print(sampler.img_ids[:10])

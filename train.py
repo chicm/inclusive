@@ -199,6 +199,7 @@ if __name__ == '__main__':
     parser.add_argument('--iter_save', default=200, type=int, help='epochs')
     parser.add_argument('--scratch',action='store_true', help='pretrained')
     parser.add_argument('--val',action='store_true', help='val only')
+    parser.add_argument('--balanced',action='store_true', help='val only')
     parser.add_argument('--cls_type', choices=['trainable', 'tuning'], type=str, default='trainable', help='train class type')
     parser.add_argument('--start_index', default=0, type=int, help='start index of classes')
     parser.add_argument('--end_index', default=100, type=int, help='end index of classes')

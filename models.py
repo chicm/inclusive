@@ -9,6 +9,12 @@ import net.resnet
 from net.senet import se_resnext50_32x4d, se_resnet50
 import settings
 
+'''
+class InclusiveNet(nn.Module):
+    def __init__(self, backbone):
+        super(InclusiveNet, self).__init__()
+    def forward(self, x):
+'''
 
 def create_backbone_model(pretrained, num_classes=7272):
     if pretrained:
@@ -40,23 +46,12 @@ def create_model(backbone_name, pretrained, num_classes, load_backbone_weights=F
         print('loading {}...'.format(model_file))
         backbone.load_state_dict(torch.load(model_file))
     
-    fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(backbone.num_ftrs, num_classes))
-    backbone.last_linear = fc
+    if backbone_name == 'se_resnext50_32x4d':
+        backbone.last_linear = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(backbone.num_ftrs, num_classes))
+    elif backbone_name == 'resnet34':
+        backbone.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(backbone.num_ftrs, num_classes))
     
     return backbone
-    '''
-
-    if backbone == 'se_resnext50_32x4d'
-
-    if model_name == 'resnet' and pretrained:
-        model, _ = create_pretrained_resnet(layers, num_classes)
-        model.name = 'resnet_{}_{}'.format(layers, num_classes)
-    elif model_name == 'resnet' and not pretrained:
-        model = create_resnet_model(layers, num_classes)
-        model.name = 'resnet_scratch_{}_{}'.format(layers, num_classes)
-
-    return model
-    '''
 
 def create_resnet_model(layers, num_classes):
     if layers not in [18, 32, 34, 50, 101, 152]:
@@ -79,6 +74,7 @@ def create_pretrained_resnet(layers, num_classes):
     else:
         raise NotImplementedError('only 34, 50, 101, 152 version of Resnet are implemented')
 
+    model.avgpool = nn.AdaptiveAvgPool2d(1)
     model.num_ftrs = model.fc.in_features
     model.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(model.num_ftrs, num_classes)) 
 
@@ -193,8 +189,9 @@ def test():
     #print(out)
 
 def test2():
-    model = create_model('se_resnext50_32x4d', pretrained=False, num_classes=100, load_backbone_weights=False).cuda()
-    x = torch.randn(2,3,128,128).cuda()
+    #model = create_model('se_resnext50_32x4d', pretrained=False, num_classes=100, load_backbone_weights=False).cuda()
+    model = create_model('resnet34', pretrained=False, num_classes=100, load_backbone_weights=False).cuda()
+    x = torch.randn(2,3,256,256).cuda()
     y = model(x)
     print(y.size())
 

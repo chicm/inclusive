@@ -87,7 +87,7 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
     train_meta, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
 
-    sampler = BalancedSammpler(train_meta, classes, stoi, min_label_num=500, max_label_num=700)
+    sampler = BalancedSammpler(train_meta, classes, stoi, balanced=args.balanced, min_label_num=500, max_label_num=700)
     df1 = train_meta.set_index('ImageID')
     sampled_train_meta = df1.loc[sampler.img_ids]
 
