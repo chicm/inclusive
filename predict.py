@@ -82,7 +82,8 @@ def model_predict(args, model, check):
     return outputs
 
 def predict(args):
-    '''
+    model = create_prediction_model(args)
+    
     #_, val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
     val_loader = get_tuning_loader(args, batch_size=args.batch_size)
 
@@ -92,21 +93,22 @@ def predict(args):
     print('fixed th:', fix_th)
     print('fixed score:', fix_score)
     
+    if args.tuning_th:
+        th = torch.Tensor(opt_thresholds).cuda()
+    else:
+        th = args.th
 
-    opt_thresholds = torch.Tensor(opt_thresholds).cuda()
-    pred_th = opt_thresholds #0.04 #fix_th
+    print('using threshold: {}'.format(th))
 
     if args.val:
         return
-    '''
-
-    model = create_prediction_model(args)
+    
     outputs = model_predict(args, model, args.check)
 
     classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
 
     label_names = []
-    pred = (outputs > 0.2).byte().cpu().numpy()
+    pred = (outputs > th).byte().cpu().numpy()
     for row in pred:
         label_names.append(get_label_names(row, classes))
 
@@ -139,11 +141,16 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='model name')
     parser.add_argument('--pretrained',action='store_true', help='val only')
     parser.add_argument('--check',action='store_true', help='check only')
+    parser.add_argument('--tuning_th',action='store_true', help='check only')
+    parser.add_argument('--val',action='store_true', help='check only')
+    parser.add_argument('--th', type=float, default=0.5, help='start index of classes')
     parser.add_argument('--cls_type',  default='trainable', choices=['trainable', 'tuning'], type=str, help='class type')
     parser.add_argument('--start_index', type=int, default=0, help='start index of classes')
     parser.add_argument('--end_index', type=int, default=100, help='end index of classes')
     parser.add_argument('--out_file', default='sub_0_100_trainable_020.csv', type=str, help='submission file name')
     args = parser.parse_args()
+
+    print(args)
 
     predict(args)
     #merge_dfs()
