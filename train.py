@@ -46,7 +46,10 @@ def train(args):
     else:
         optimizer = optim.SGD(model.parameters(), momentum=0.9, weight_decay=0.0001, lr=args.lr)
 
-    lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=6, min_lr=args.min_lr)
+    if args.lrs == 'plateau':
+        lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=args.factor, patience=args.patience, min_lr=args.min_lr)
+    else:
+        lr_scheduler = CosineAnnealingLR(optimizer, args.t_max, eta_min=args.min_lr)
 
     train_loader, val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
     #val_loader = get_tuning_loader(args, batch_size=args.batch_size)
@@ -56,7 +59,7 @@ def train(args):
 
     print('epoch | itr |   lr    |   %             |  loss  |  avg   |  loss  | optim f2 |  15 f2  | 10 f2  |  best f2  |  thresh  |  time | save |')
 
-    best_val_loss, best_val_score, th = validate(argsm model, criterion, val_loader, args.batch_size, args.no_score)
+    best_val_loss, best_val_score, th = validate(args, model, val_loader, args.batch_size, args.no_score)
 
     print('val   |     |         |                 |        |        | {:.4f} | {:.4f}   |         |        |  {:.4f}   |   {:.3f} |       |'.format(
         best_val_loss, best_val_score, best_val_score, th))
@@ -64,7 +67,10 @@ def train(args):
     if args.val:
         return
 
-    lr_scheduler.step(best_val_score - best_val_loss)
+    if args.lrs == 'plateau':
+        lr_scheduler.step(best_val_score)
+    else:
+        lr_scheduler.step()
     model.train()
 
     bg = time.time()
@@ -81,7 +87,7 @@ def train(args):
             output = model(x)
             #loss = focal_loss(output, target)
             #loss = criterion(output, target)
-            loss = weighted_bce(output, target)
+            loss = weighted_bce(args, output, target)
             loss.backward()
             optimizer.step()
 
@@ -91,7 +97,7 @@ def train(args):
                     loss.item(), train_loss/(batch_idx+1)), end='')
 
             if iteration % args.iter_save == 0:
-                val_loss, val_score, th = validate(args, model, criterion, val_loader, args.batch_size, args.no_score)
+                val_loss, val_score, th = validate(args, model, val_loader, args.batch_size, args.no_score)
                 model.train()
                 _save_ckp = ''
 
@@ -102,14 +108,17 @@ def train(args):
                     torch.save(model.state_dict(), model_file)
                     _save_ckp = '*'
                 
-                lr_scheduler.step(val_score-val_loss)
+                if args.lrs == 'plateau':
+                    lr_scheduler.step(val_score)
+                else:
+                    lr_scheduler.step()
                 current_lr = get_lrs(optimizer) 
 
                 print(' {:.4f} | {:.4f}   |         |        |  {:.4f}   |  {:.3f} | {:.1f}  | {:4s} |'.format(
                     val_loss, val_score, best_val_score, th, (time.time() - bg) / 60, _save_ckp))
                 bg = time.time()
 
-def validate(args, model, criterion, val_loader, batch_size, no_score=False):
+def validate(args, model, val_loader, batch_size, no_score=False):
     #print('\nvalidating...')
     model.eval()
     val_loss = 0
@@ -128,7 +137,7 @@ def validate(args, model, criterion, val_loader, batch_size, no_score=False):
             else:
                 outputs = torch.cat([outputs, output])    
             #loss = criterion(output, target)
-            loss = weighted_bce(output, target)
+            loss = weighted_bce(args, output, target)
             #loss = focal_loss(output, target)
             val_loss += loss.item()
             
@@ -167,8 +176,12 @@ def get_lrs(optimizer):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inclusive')
     parser.add_argument('--optim', choices=['Adam', 'SGD'], type=str, default='SGD', help='optimizer')
+    parser.add_argument('--lrs', default='plateau', choices=['cosine', 'plateau'], help='LR sceduler')
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
     parser.add_argument('--min_lr', default=1e-5, type=float, help='min learning rate')
+    parser.add_argument('--patience', default=6, type=int, help='lr scheduler patience')
+    parser.add_argument('--factor', default=0.5, type=float, help='lr scheduler factor')
+    parser.add_argument('--t_max', default=12, type=int, help='lr scheduler patience')
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
     parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='backbone')
     parser.add_argument('--layers', default=34, type=int, help='batch size')
