@@ -24,10 +24,9 @@ def create_backbone_model(pretrained, num_classes=7272):
 def create_model(backbone_name, pretrained, num_classes, load_backbone_weights=False):
     if backbone_name == 'se_resnext50_32x4d':
         backbone = create_backbone_model(pretrained)
-        fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(backbone.num_ftrs, num_classes))
-        backbone.last_linear = fc
+        
     elif backbone_name == 'resnet34':
-        backbone, _ = create_pretrained_resnet(34, num_classes)
+        backbone, _ = create_pretrained_resnet(34, 7272)
     else:
         raise ValueError('unsupported backbone name {}'.format(backbone_name))
     backbone.name = backbone_name
@@ -40,7 +39,10 @@ def create_model(backbone_name, pretrained, num_classes, load_backbone_weights=F
     if load_backbone_weights:
         print('loading {}...'.format(model_file))
         backbone.load_state_dict(torch.load(model_file))
-
+    
+    fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(backbone.num_ftrs, num_classes))
+    backbone.last_linear = fc
+    
     return backbone
     '''
 
