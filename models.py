@@ -27,7 +27,7 @@ def create_model(backbone_name, pretrained, num_classes, load_backbone_weights=F
         fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(backbone.num_ftrs, num_classes))
         backbone.last_linear = fc
     elif backbone_name == 'resnet34':
-        backbone, _ = create_pretrained_resnet(34, 7272)
+        backbone, _ = create_pretrained_resnet(34, num_classes)
     else:
         raise ValueError('unsupported backbone name {}'.format(backbone_name))
     backbone.name = backbone_name
