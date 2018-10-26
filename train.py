@@ -10,7 +10,7 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLRO
 
 from loader import get_train_val_loaders, get_tuning_loader
 import settings
-from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_fix_threshold
+from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_fix_threshold, find_threshold
 from models import create_model, AttentionResNet
 
 def weighted_bce(args, x, y):
@@ -52,7 +52,8 @@ def train(args):
         lr_scheduler = CosineAnnealingLR(optimizer, args.t_max, eta_min=args.min_lr)
 
     train_loader, val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
-    #val_loader = get_tuning_loader(args, batch_size=args.batch_size)
+    if args.tuning_th:
+        val_loader = get_tuning_loader(args, batch_size=args.batch_size)
     model.train()
 
     iteration = 0
@@ -143,11 +144,19 @@ def validate(args, model, val_loader, batch_size, no_score=False):
             
     val_loss = val_loss / (val_loader.num/batch_size)
     optimized_score = 0.
+    best_th = 0.
 
-    if not no_score:
+    if args.tuning_th:
+        best_th = find_threshold(outputs, targets)
+        optimized_score = f2_score(targets, torch.sigmoid(outputs), torch.Tensor(best_th).cuda())
+        #optimized_score = f2_score(targets, torch.sigmoid(outputs), best_th)
+        best_th = 0.
+    elif not no_score:
         best_th = find_fix_threshold(outputs, targets)
         optimized_score = f2_score(targets, torch.sigmoid(outputs), threshold=best_th)
         #optimized_score = f2_score(targets, torch.sigmoid(outputs), best_th)
+    else:
+        pass
 
     #print(best_th)
     #print('optimized score:', optimized_score)
@@ -196,6 +205,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_score',action='store_true', help='do not calculate f2 score')
     parser.add_argument('--pretrained',action='store_true',help='backbone use pretrained model')
     parser.add_argument('--pos_weight', default=20, type=int, help='end index of classes')
+    parser.add_argument('--tuning_th',action='store_true', help='val only')
     args = parser.parse_args()
 
     print(args)
