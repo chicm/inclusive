@@ -13,6 +13,11 @@ import settings
 from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_fix_threshold
 from models import create_model, AttentionResNet
 
+def weighted_bce(args, x, y):
+
+    w = y*args.pos_weight + 1
+
+    return F.binary_cross_entropy_with_logits(x, y, w)
 
 def train(args):
     model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=True)
@@ -34,7 +39,7 @@ def train(args):
         print('loading {}...'.format(CKP))
         model.load_state_dict(torch.load(CKP))
     model = model.cuda()
-    criterion = nn.BCEWithLogitsLoss()
+    #criterion = nn.BCEWithLogitsLoss()
 
     if args.optim == 'Adam':
         optimizer = optim.Adam(model.parameters(), weight_decay=0.0001, lr=args.lr)
@@ -51,7 +56,7 @@ def train(args):
 
     print('epoch | itr |   lr    |   %             |  loss  |  avg   |  loss  | optim f2 |  15 f2  | 10 f2  |  best f2  |  thresh  |  time | save |')
 
-    best_val_loss, best_val_score, th = validate(model, criterion, val_loader, args.batch_size, args.no_score)
+    best_val_loss, best_val_score, th = validate(argsm model, criterion, val_loader, args.batch_size, args.no_score)
 
     print('val   |     |         |                 |        |        | {:.4f} | {:.4f}   |         |        |  {:.4f}   |   {:.3f} |       |'.format(
         best_val_loss, best_val_score, best_val_score, th))
@@ -75,7 +80,8 @@ def train(args):
             optimizer.zero_grad()
             output = model(x)
             #loss = focal_loss(output, target)
-            loss = criterion(output, target)
+            #loss = criterion(output, target)
+            loss = weighted_bce(output, target)
             loss.backward()
             optimizer.step()
 
@@ -85,7 +91,7 @@ def train(args):
                     loss.item(), train_loss/(batch_idx+1)), end='')
 
             if iteration % args.iter_save == 0:
-                val_loss, val_score, th = validate(model, criterion, val_loader, args.batch_size, args.no_score)
+                val_loss, val_score, th = validate(args, model, criterion, val_loader, args.batch_size, args.no_score)
                 model.train()
                 _save_ckp = ''
 
@@ -103,7 +109,7 @@ def train(args):
                     val_loss, val_score, best_val_score, th, (time.time() - bg) / 60, _save_ckp))
                 bg = time.time()
 
-def validate(model, criterion, val_loader, batch_size, no_score=False):
+def validate(args, model, criterion, val_loader, batch_size, no_score=False):
     #print('\nvalidating...')
     model.eval()
     val_loss = 0
@@ -121,7 +127,8 @@ def validate(model, criterion, val_loader, batch_size, no_score=False):
                 outputs = output
             else:
                 outputs = torch.cat([outputs, output])    
-            loss = criterion(output, target)
+            #loss = criterion(output, target)
+            loss = weighted_bce(output, target)
             #loss = focal_loss(output, target)
             val_loss += loss.item()
             
@@ -174,6 +181,7 @@ if __name__ == '__main__':
     parser.add_argument('--end_index', default=100, type=int, help='end index of classes')
     parser.add_argument('--no_score',action='store_true', help='do not calculate f2 score')
     parser.add_argument('--pretrained',action='store_true',help='backbone use pretrained model')
+    parser.add_argument('--pos_weight', default=20, type=int, help='end index of classes')
     args = parser.parse_args()
 
     print(args)
