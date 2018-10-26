@@ -20,7 +20,7 @@ def weighted_bce(args, x, y):
     return F.binary_cross_entropy_with_logits(x, y, w)
 
 def train(args):
-    model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=True)
+    model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=not args.no_bk_weights)
     sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
 
     if args.pretrained:
@@ -184,6 +184,7 @@ if __name__ == '__main__':
     parser.add_argument('--t_max', default=12, type=int, help='lr scheduler patience')
     parser.add_argument('--batch_size', default=96, type=int, help='batch size')
     parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='backbone')
+    parser.add_argument('--no_bk_weights',action='store_true',help='backbone use pretrained model')
     parser.add_argument('--layers', default=34, type=int, help='batch size')
     parser.add_argument('--epochs', default=1000, type=int, help='epochs')
     parser.add_argument('--iter_save', default=200, type=int, help='epochs')

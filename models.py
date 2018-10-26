@@ -21,9 +21,17 @@ def create_backbone_model(pretrained, num_classes=7272):
     basenet.name = 'se_resnext50_32x4d'
     return basenet
 
-def create_model(backbone, pretrained, num_classes, load_backbone_weights=False):
-    
-    backbone = create_backbone_model(pretrained)
+def create_model(backbone_name, pretrained, num_classes, load_backbone_weights=False):
+    if backbone_name == 'se_resnext50_32x4d':
+        backbone = create_backbone_model(pretrained)
+        fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(backbone.num_ftrs, num_classes))
+        backbone.last_linear = fc
+    elif backbone_name == 'resnet34':
+        backbone, _ = create_pretrained_resnet(34, 7272)
+    else:
+        raise ValueError('unsupported backbone name {}'.format(backbone_name))
+    backbone.name = backbone_name
+
     if pretrained:
         model_file = os.path.join(settings.MODEL_DIR, 'backbone', backbone.name, 'pretrained', 'best.pth')
     else:
@@ -32,9 +40,6 @@ def create_model(backbone, pretrained, num_classes, load_backbone_weights=False)
     if load_backbone_weights:
         print('loading {}...'.format(model_file))
         backbone.load_state_dict(torch.load(model_file))
-
-    fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(backbone.num_ftrs, num_classes))
-    backbone.last_linear = fc
 
     return backbone
     '''
@@ -72,8 +77,8 @@ def create_pretrained_resnet(layers, num_classes):
     else:
         raise NotImplementedError('only 34, 50, 101, 152 version of Resnet are implemented')
 
-    num_ftrs = model.fc.in_features
-    model.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, num_classes)) 
+    model.num_ftrs = model.fc.in_features
+    model.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(model.num_ftrs, num_classes)) 
 
     return model, bottom_channels
 

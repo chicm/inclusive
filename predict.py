@@ -85,15 +85,14 @@ def predict(args):
     model = create_prediction_model(args)
     
     #_, val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
-    val_loader = get_tuning_loader(args, batch_size=args.batch_size)
 
-    opt_thresholds, tuning_f2, fix_th, fix_score = find_best_thresholds(model, val_loader)
-    print(opt_thresholds)
-    print('optimized tuning f2:', tuning_f2)
-    print('fixed th:', fix_th)
-    print('fixed score:', fix_score)
-    
     if args.tuning_th:
+        val_loader = get_tuning_loader(args, batch_size=args.batch_size)
+        opt_thresholds, tuning_f2, fix_th, fix_score = find_best_thresholds(model, val_loader)
+        print(opt_thresholds)
+        print('optimized tuning f2:', tuning_f2)
+        print('fixed th:', fix_th)
+        print('fixed score:', fix_score)
         th = torch.Tensor(opt_thresholds).cuda()
     else:
         th = args.th
