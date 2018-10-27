@@ -48,12 +48,18 @@ def focal_loss(x, y):
     #return F.binary_cross_entropy_with_logits(x, t, w, size_average=False)
     return F.binary_cross_entropy_with_logits(x, t, w)
 
-def criterion(args, outputs, targets):
+def criterion(args, outputs, targets, num_output, num_target):
     c = nn.CrossEntropyLoss()
+    cls_loss = c(outputs, targets)
+    num_preds = torch.sigmoid(num_output)*5
+    num_loss = F.mse_loss(num_preds.squeeze(), num_target.float())
+    return cls_loss + num_loss, cls_loss.item(), num_loss.item()
+    '''
     if args.focal_loss:
         return focal_loss(outputs, targets)
     else:
         return c(outputs, targets)
+    '''
 
 def accuracy(output, label, topk=(1,5)):
     maxk = max(topk)
@@ -111,12 +117,12 @@ def train(args):
     #ExponentialLR(optimizer, 0.9, last_epoch=-1) #CosineAnnealingLR(optimizer, 15, 1e-7) 
     best_cls_acc = 0.
 
-    print('epoch |   lr    |   %        |  loss  |  avg   | f loss | lovaz  |  bce   |  cls   |  iou   | iout   |  best  | time | save |  acc   |')
+    print('epoch |   lr    |   %        |  loss  |  avg   |  loss  |  cls   |  num   |  top1   | top5   |  best  |  time |  save  |')
 
     if not args.no_first_val:
-        best_iout, _iou, _f, _l, _b, _ship, best_cls_acc = validate(args, model, val_loader, args.start_epoch)
-        print('val   |         |            |        |        | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} |      |      | {:.4f} |'.format(
-            _f, _l, _b, _ship, _iou, best_iout, best_cls_acc, best_cls_acc))
+        best_cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate(args, model, val_loader, args.start_epoch)
+        print('val   |         |            |        |        | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} |      |      |'.format(
+            total_loss, cls_loss, num_loss, top1_acc, best_cls_acc, best_cls_acc))
 
     if args.val:
         return
@@ -124,7 +130,7 @@ def train(args):
     model.train()
 
     if args.lrs == 'plateau':
-        lr_scheduler.step(best_iout)
+        lr_scheduler.step(best_cls_acc)
     else:
         lr_scheduler.step()
     train_iter = 0
@@ -136,12 +142,12 @@ def train(args):
         bg = time.time()
         for batch_idx, data in enumerate(train_loader):
             train_iter += 1
-            img, target = data
-            img, target = img.cuda(), target.cuda()
+            img, target, num_target = data
+            img, target, num_target = img.cuda(), target.cuda(), num_target.cuda()
             optimizer.zero_grad()
-            output, obj_num = model(img)
+            output, num_output = model(img)
             
-            loss = criterion(args, output, target)
+            loss, _, _ = criterion(args, output, target, num_output, num_target)
             loss.backward()
  
             optimizer.step()
@@ -151,19 +157,16 @@ def train(args):
                 epoch, float(current_lr[0]), args.batch_size*(batch_idx+1), train_loader.num, loss.item(), train_loss/(batch_idx+1)), end='')
 
             if train_iter > 0 and train_iter % args.iter_val == 0:
-                iout, iou, focal_loss, lovaz_loss, bce_loss, cls_loss, cls_acc = validate(args, model, val_loader, epoch=epoch)
+                cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate(args, model, val_loader, epoch=epoch)
                 
                 _save_ckp = ''
                 if cls_acc > best_cls_acc:
                     best_cls_acc = cls_acc
                     torch.save(model.state_dict(), model_file)
                     _save_ckp = '*'
-                # print('epoch |   lr    |   %       |  loss  |  avg   | f loss | lovaz  |  bce   |  cls   |  iou   | iout   |  best  | time | save |  ship  |')
-                print(' {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.2f} | {:4s} | {:.4f} |'.format(
-                    focal_loss, lovaz_loss, bce_loss, cls_loss, iou, iout, best_cls_acc, (time.time() - bg) / 60, _save_ckp, cls_acc))
+                print('  {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.2f} |  {:4s} |'.format(
+            total_loss, cls_loss, num_loss, top1_acc, cls_acc, best_cls_acc, (time.time() - bg) / 60, _save_ckp))
 
-                #log.info('epoch {}: train loss: {:.4f} focal loss: {:.4f} lovaz loss: {:.4f} iout: {:.4f} best iout: {:.4f} iou: {:.4f} lr: {} {}'
-                #    .format(epoch, train_loss, focal_loss, lovaz_loss, iout, best_iout, iou, current_lr, _save_ckp))
 
                 model.train()
                 
@@ -188,25 +191,29 @@ def validate(args, model, val_loader, epoch=0, threshold=0.5, cls_threshold=0.5)
     #print('validating...')
 
     total_num = 0
-    corrects = 0
-    ship_loss = 0
+    top1_corrects, corrects = 0, 0
+    total_loss, cls_loss, num_loss = 0, 0, 0
     with torch.no_grad():
-        for img, target in val_loader:
-            img, target = img.cuda(), target.cuda()
-            output, _ = model(img)
-            loss  = criterion(args, output, target)
-            ship_loss += loss.item()
+        for img, target, num_target in val_loader:
+            img, target, num_target = img.cuda(), target.cuda(), num_target.cuda()
+            output, num_output = model(img)
+            loss, _cls_loss, _num_loss  = criterion(args, output, target, num_output, num_target)
+            total_loss += loss.item()
+            cls_loss += _cls_loss
+            num_loss += _num_loss
 
             #preds = output.max(1, keepdim=True)[1]
             #corrects += preds.eq(target.view_as(preds)).sum().item()
-            _, top5 = accuracy(output, target)
+            top1, top5 = accuracy(output, target)
+            top1_corrects += top1
             corrects += top5
             total_num += len(img)
             
-    cls_acc = corrects / total_num
+    top5_acc = corrects / total_num
+    top1_acc = top1_corrects / total_num
     n_batches = val_loader.num // args.batch_size if val_loader.num % args.batch_size == 0 else val_loader.num // args.batch_size + 1
 
-    return 0, 0, 0, 0, ship_loss / n_batches, ship_loss/ n_batches, cls_acc
+    return top5_acc, top1_acc, total_loss/ n_batches, cls_loss / n_batches, num_loss / n_batches
 
 def create_submission(args, predictions, outfile):
     meta = pd.read_csv(settings.STAGE_1_SAMPLE_SUBMISSION)
@@ -224,7 +231,8 @@ def predict(args):
     with torch.no_grad():
         for i, x in enumerate(test_loader):
             x = x.cuda()
-            output = torch.sigmoid(model(x))
+            #output = torch.sigmoid(model(x))
+            output, _ = model(x)
             output = F.softmax(output, dim=1)
             _, pred = output.topk(3, 1, True, True)
 
@@ -271,7 +279,7 @@ if __name__ == '__main__':
     parser.add_argument('--focal_loss', action='store_true')
     parser.add_argument('--pretrained', action='store_true')
     parser.add_argument('--predict', action='store_true')
-    parser.add_argument('--sub_file', default='sub_backbone_1.csv', help='optimizer')
+    parser.add_argument('--sub_file', default='sub_backbone_4.csv', help='optimizer')
     parser.add_argument('--no_first_val', action='store_true')
     #parser.add_argument('--img_sz', default=256, type=int, help='image size')
     

@@ -56,11 +56,12 @@ class ImageDataset(data.Dataset):
         if self.label_names is None:
             return img
         else:
-            return img, self.get_label(index)
+            labels = self.get_label(index)
+            return img, labels[0], labels[1]
 
     def __len__(self):
         return self.num
-
+    '''
     def collate_fn(self, batch):
         imgs = [x[0] for x in batch]
         h = w = self.input_size
@@ -75,15 +76,16 @@ class ImageDataset(data.Dataset):
         else:
             labels = [x[1] for x in batch]
             return inputs, torch.tensor(labels)
+    '''
 
     def get_label(self, index):
         label_codes = [x for x in self.label_names[index].strip().split() if x in self.classes]
         label_counts = [self.df_class_counts.loc[x]['counts'] for x in label_codes]
         if self.train_mode:
             #random.seed(hash(self.img_ids[index]))
-            return self.stoi[label_codes[int(random.random()*len(label_codes))]] # random select for train
+            return self.stoi[label_codes[int(random.random()*len(label_codes))]], len(label_codes) # random select for train
         else:
-            return self.stoi[label_codes[np.argmin(label_counts)]] # select rare label as target for validation
+            return self.stoi[label_codes[np.argmin(label_counts)]], len(label_codes) # select rare label as target for validation
 
 
 def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=True):
@@ -111,10 +113,10 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     train_set = ImageDataset(True, train_meta['ImageID'].values.tolist(), img_dir, classes, stoi, df_class_counts, train_meta['LabelName'].values.tolist())
     val_set = ImageDataset(False, val_meta['ImageID'].values.tolist(), img_dir, classes, stoi, df_class_counts, val_meta['LabelName'].values.tolist())
 
-    train_loader = data.DataLoader(train_set, batch_size=batch_size, shuffle=train_shuffle, num_workers=4)#, collate_fn=train_set.collate_fn, drop_last=True)
+    train_loader = data.DataLoader(train_set, batch_size=batch_size, shuffle=train_shuffle, num_workers=4, drop_last=True)#, collate_fn=train_set.collate_fn, drop_last=True)
     train_loader.num = train_set.num
 
-    val_loader = data.DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=val_set.collate_fn, drop_last=False)
+    val_loader = data.DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=4, drop_last=False)
     val_loader.num = val_set.num
 
     return train_loader, val_loader
@@ -129,7 +131,7 @@ def get_test_loader(args, batch_size=8, dev_mode=False):
         batch_size = 4
     
     dset = ImageDataset(False, img_ids, img_dir, classes, stoi)
-    dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=dset.collate_fn, drop_last=False)
+    dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=False, num_workers=4, drop_last=False)
     dloader.num = dset.num
     dloader.img_ids = img_ids
     return dloader
@@ -138,9 +140,9 @@ def test_train_loader():
     args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 7172, 'max_labels': 5})
     loader, _ = get_train_val_loaders(args, dev_mode=True, batch_size=10)
     for i, data in enumerate(loader):
-        imgs, targets = data
-        print(targets, type(targets))
-        print(imgs.size(), targets.size())
+        imgs, targets, num_targets = data
+        print(targets, type(targets), num_targets)
+        print(imgs.size(), targets.size(), num_targets.size())
         if i > 0:
             break
 
