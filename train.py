@@ -102,7 +102,7 @@ def train(args):
                 model.train()
                 _save_ckp = ''
 
-                if val_score - val_loss > best_val_score - best_val_loss:
+                if val_score  > best_val_score :
                     best_val_score = val_score
                     best_val_loss = val_loss
 
