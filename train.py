@@ -11,7 +11,7 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLRO
 from loader import get_train_val_loaders, get_tuning_loader
 import settings
 from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_fix_threshold, find_threshold
-from models import create_model, AttentionResNet
+from models import create_model, InclusiveNet
 
 def weighted_bce(args, x, y):
 
@@ -20,7 +20,8 @@ def weighted_bce(args, x, y):
     return F.binary_cross_entropy_with_logits(x, y, w)
 
 def train(args):
-    model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=not args.no_bk_weights)
+    #model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=not args.no_bk_weights)
+    model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
     sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
 
     if args.pretrained:
@@ -34,7 +35,10 @@ def train(args):
 
     print('model file: {}, exist: {}'.format(model_file, os.path.exists(model_file)))
 
-    CKP = model_file
+    if args.init_ckp is None:
+        CKP = model_file
+    else:
+        CKP = args.init_ckp
     if os.path.exists(CKP):
         print('loading {}...'.format(CKP))
         model.load_state_dict(torch.load(CKP))
@@ -85,7 +89,7 @@ def train(args):
             x, target = data
             x, target = x.cuda(), target.cuda()
             optimizer.zero_grad()
-            output = model(x)
+            output, _ = model(x)
             #loss = focal_loss(output, target)
             #loss = criterion(output, target)
             loss = weighted_bce(args, output, target)
@@ -128,7 +132,7 @@ def validate(args, model, val_loader, batch_size, no_score=False):
     with torch.no_grad():
         for x, target in val_loader:
             x, target = x.cuda(), target.cuda()
-            output = model(x)
+            output, _ = model(x)
             if targets is None:
                 targets = target
             else:
@@ -207,6 +211,7 @@ if __name__ == '__main__':
     parser.add_argument('--pretrained',action='store_true',help='backbone use pretrained model')
     parser.add_argument('--pos_weight', default=20, type=int, help='end index of classes')
     parser.add_argument('--tuning_th',action='store_true', help='val only')
+    parser.add_argument('--init_ckp', default=None, type=str, help='backbone')
     args = parser.parse_args()
 
     print(args)

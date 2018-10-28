@@ -6,6 +6,7 @@ from attrdict import AttrDict
 from torchvision import datasets, models, transforms
 from utils import get_classes, get_test_ids, get_train_val_meta, get_tuning_meta
 from balanced_sampler import BalancedSammpler
+from weighted_sampler import get_weighted_sample
 from PIL import Image
 import settings
 
@@ -87,18 +88,24 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
     train_meta, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
 
-    sampler = BalancedSammpler(train_meta, classes, stoi, balanced=args.balanced, min_label_num=500, max_label_num=700)
-    df1 = train_meta.set_index('ImageID')
-    sampled_train_meta = df1.loc[sampler.img_ids]
+    #sampler = BalancedSammpler(train_meta, classes, stoi, balanced=args.balanced, min_label_num=500, max_label_num=700)
+    #df1 = train_meta.set_index('ImageID')
+    #sampled_train_meta = df1.loc[sampler.img_ids]
 
-    print(sampled_train_meta.shape)
+    # resample training data
+    train_img_ids = get_weighted_sample(train_meta, 1024*100)
+    df_sampled = train_meta.set_index('ImageID').loc[train_img_ids]
+
+    print(df_sampled.shape)
     val_meta = val_meta.iloc[:2000]
 
     #if dev_mode:
     #    train_meta = train_meta.iloc[:10]
     #    val_meta = val_meta.iloc[:10]
     img_dir = settings.TRAIN_IMG_DIR
-    train_set = ImageDataset(True, sampled_train_meta.index.values.tolist(), img_dir, classes, stoi, sampled_train_meta['LabelName'].values.tolist())
+    #train_set = ImageDataset(True, sampled_train_meta.index.values.tolist(), img_dir, classes, stoi, sampled_train_meta['LabelName'].values.tolist())
+    train_set = ImageDataset(True, train_img_ids, img_dir, classes, stoi, df_sampled['LabelName'].values.tolist())
+    
     val_set = ImageDataset(False, val_meta['ImageID'].values.tolist(), img_dir, classes, stoi, val_meta['LabelName'].values.tolist())
 
     train_loader = data.DataLoader(train_set, batch_size=batch_size, shuffle=train_shuffle, num_workers=4, collate_fn=train_set.collate_fn, drop_last=True)
