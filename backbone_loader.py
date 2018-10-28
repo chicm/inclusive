@@ -7,6 +7,7 @@ from attrdict import AttrDict
 from torchvision import datasets, models, transforms
 from utils import get_classes, get_test_ids, get_train_val_meta, get_tuning_meta
 from balanced_sampler import BalancedSammpler
+from weighted_sampler import get_weighted_sample
 from PIL import Image
 from sklearn.utils import shuffle
 import random
@@ -104,13 +105,17 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
 
     df_class_counts = pd.read_csv(settings.SORTED_CLASSES_TRAINABLE)
 
+    # resample training data
+    train_img_ids = get_weighted_sample(train_meta, 1024*100)
+    df_sampled = train_meta.set_index('ImageID').loc[train_img_ids]
+
     if dev_mode:
         train_meta = train_meta.iloc[:10]
         val_meta = val_meta.iloc[:10]
         train_shuffle = False
     img_dir = settings.TRAIN_IMG_DIR
     
-    train_set = ImageDataset(True, train_meta['ImageID'].values.tolist(), img_dir, classes, stoi, df_class_counts, train_meta['LabelName'].values.tolist())
+    train_set = ImageDataset(True, train_img_ids, img_dir, classes, stoi, df_class_counts, df_sampled['LabelName'].values.tolist())
     val_set = ImageDataset(False, val_meta['ImageID'].values.tolist(), img_dir, classes, stoi, df_class_counts, val_meta['LabelName'].values.tolist())
 
     train_loader = data.DataLoader(train_set, batch_size=batch_size, shuffle=train_shuffle, num_workers=4, drop_last=True)#, collate_fn=train_set.collate_fn, drop_last=True)

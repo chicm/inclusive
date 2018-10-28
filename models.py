@@ -10,15 +10,16 @@ import settings
 
 
 class InclusiveNet(nn.Module):
-    def __init__(self, backbone_name, num_classes=7272, pretrained=True):
+    def __init__(self, backbone_name, num_classes=7172, pretrained=True):
         super(InclusiveNet, self).__init__()
+        print('num_classes:', num_classes)
         if backbone_name == 'se_resnext50_32x4d':
             self.backbone = se_resnext50_32x4d()
         elif backbone_name == 'resnet34':
             self.backbone = resnet34(pretrained=True)
         else:
             raise ValueError('unsupported backbone name {}'.format(backbone_name))
-        self.backbone.last_linear = nn.Linear(2048, num_classes) # for model convert
+        #self.backbone.last_linear = nn.Linear(2048, 7272) # for model convert
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.logit = nn.Linear(2048, num_classes)
@@ -241,8 +242,72 @@ def convert_model():
     y1, y2 = new_model(x)
     print(y1.size(), y2.size())
 
+def convert_model2():
+    #model_file = r'G:\inclusive\models\backbone\se_resnext50_32x4d\pretrained\best.pth'
+    model_file = os.path.join(settings.MODEL_DIR, 'backbone', 'InclusiveNet_se_resnext50_32x4d', 'pretrained', 'best_old.pth')
+    old_model = InclusiveNet('se_resnext50_32x4d')
+    old_model.load_state_dict(torch.load(model_file))
+
+    new_model = InclusiveNet('se_resnext50_32x4d', num_classes=7172)
+    new_model.backbone = old_model.backbone
+    print(new_model.backbone.last_linear)
+    new_model.backbone.last_linear = nn.Linear(2048, 1000)
+
+
+    new_model_file = os.path.join(settings.MODEL_DIR, 'backbone', 'InclusiveNet_se_resnext50_32x4d', 'pretrained', 'best.pth')
+    torch.save(new_model.state_dict(), new_model_file)
+
+    new_model = new_model.cuda()
+    x = torch.randn(2,3,256,256).cuda()
+    y1, y2 = new_model(x)
+    print(y1.size(), y2.size())
+
+def convert_model3():
+    #model_file = r'G:\inclusive\models\backbone\se_resnext50_32x4d\pretrained\best.pth'
+    model_file = os.path.join(settings.MODEL_DIR, 'backbone', 'se_resnext50_32x4d', 'scratch', 'best.pth')
+    old_model = create_backbone_model(True)
+    old_model.load_state_dict(torch.load(model_file))
+
+
+
+    new_model = InclusiveNet('se_resnext50_32x4d', num_classes=7272)
+    new_model.backbone = old_model
+    new_model.logit = old_model.last_linear
+    #print(new_model.backbone.last_linear)
+    #new_model.backbone.last_linear = nn.Linear(2048, 1000)
+
+
+    new_model_file = os.path.join(settings.MODEL_DIR, 'backbone', 'InclusiveNet_se_resnext50_32x4d', 'scratch', 'best.pth')
+
+
+    #new_model_file = os.path.join(settings.MODEL_DIR, 'backbone', 'se_resnext50_32x4d', 'pretrained', 'best_new.pth')
+    torch.save(new_model.state_dict(), new_model_file)
+
+    new_model = new_model.cuda()
+    x = torch.randn(2,3,256,256).cuda()
+    y1, y2 = new_model(x)
+    print(y1.size(), y2.size())
+
+
+def convert_model4():
+    model_file = os.path.join(settings.MODEL_DIR, 'backbone', 'se_resnext50_32x4d', 'pretrained', 'best.pth')
+    old_model = create_backbone_model(True)
+    old_model.load_state_dict(torch.load(model_file))
+
+    old_model.last_linear = nn.Linear(2048, 1000) # for model convert
+
+    new_model = InclusiveNet('se_resnext50_32x4d', num_classes=7172)
+    new_model.backbone = old_model
+
+    new_model_file = os.path.join(settings.MODEL_DIR, 'backbone', 'InclusiveNet_se_resnext50_32x4d', 'pretrained', 'best.pth')
+    torch.save(new_model.state_dict(), new_model_file)
+
+    new_model = new_model.cuda()
+    x = torch.randn(2,3,256,256).cuda()
+    y1, y2 = new_model(x)
+    print(y1.size(), y2.size())
 
 if __name__ == '__main__':
     #test()
     #test3()
-    convert_model()
+    convert_model4()

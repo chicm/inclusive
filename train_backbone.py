@@ -16,10 +16,11 @@ import settings
 from backbone_loader import get_train_val_loaders, get_test_loader
 import cv2
 from models import create_backbone_model, InclusiveNet
-from utils import get_classes
+from utils import get_classes, get_cls_counts, get_weights_by_counts
 
 
 MODEL_DIR = settings.MODEL_DIR
+cls_weights = None
 
 def focal_loss(x, y):
     '''Focal loss.
@@ -49,6 +50,15 @@ def focal_loss(x, y):
     return F.binary_cross_entropy_with_logits(x, t, w)
 
 def criterion(args, outputs, targets, num_output, num_target):
+    global cls_weights
+
+    if cls_weights is None:
+        classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
+        cnts = get_cls_counts(classes, args.cls_type)
+        cls_weights = get_weights_by_counts(cnts, max_weight=10)
+        cls_weights = torch.Tensor(cls_weights).cuda()
+
+    #c = nn.CrossEntropyLoss(cls_weights)
     c = nn.CrossEntropyLoss()
     cls_loss = c(outputs, targets)
     num_preds = torch.sigmoid(num_output)*5
@@ -76,7 +86,7 @@ def accuracy(output, label, topk=(1,5)):
 
 def create_model(args, prediction=False):
     #model = create_backbone_model(args.pretrained)
-    model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained)
+    model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
     if args.pretrained:
         model_file = os.path.join(MODEL_DIR, 'backbone', model.name, 'pretrained', 'best.pth')
     else:
@@ -104,7 +114,7 @@ def train(args):
     model, model_file = create_model(args)
 
     if args.optim == 'Adam':
-        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.001)
+        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
     else:
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=0.0001)
 
@@ -274,7 +284,7 @@ if __name__ == '__main__':
     parser.add_argument('--dev_mode', action='store_true')
     parser.add_argument('--cls_type', choices=['trainable', 'tuning'], type=str, default='trainable', help='train class type')
     parser.add_argument('--start_index', default=0, type=int, help='start index of classes')
-    parser.add_argument('--end_index', default=7272, type=int, help='end index of classes')
+    parser.add_argument('--end_index', default=7172, type=int, help='end index of classes')
     parser.add_argument('--max_labels', default=3, type=int, help='filter max labels')
     parser.add_argument('--focal_loss', action='store_true')
     parser.add_argument('--pretrained', action='store_true')
