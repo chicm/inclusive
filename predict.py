@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import pandas as pd
 import settings
-from models import create_model
+from models import create_model, InclusiveNet
 from loader import get_test_loader, get_tuning_loader, get_train_val_loaders
 from metrics import find_threshold, f2_score, find_fix_threshold, f2_scores
 from utils import get_classes
@@ -35,7 +35,7 @@ def find_best_thresholds(model, val_loader):
     with torch.no_grad():
         for x, target in val_loader:
             x, target = x.cuda(), target.cuda()
-            output = model(x)
+            output,_ = model(x)
             if targets is None:
                 targets = target
             else:
@@ -69,7 +69,8 @@ def model_predict(args, model, check):
     with torch.no_grad():
         for i, x in enumerate(test_loader):
             x = x.cuda()
-            output = torch.sigmoid(model(x))
+            output, _ = model(x)
+            output = torch.sigmoid(output)
 
             if outputs is None:
                 outputs = output
