@@ -220,7 +220,7 @@ def test3():
     model = InclusiveNet('se_resnext50_32x4d').cuda()
     x = torch.randn(2,3,256,256).cuda()
     y1, y2 = model(x)
-    print(y1.size(), y2.size())
+    print(y1.size(), y2.size(), y2)
 
 def convert_model():
     #model_file = r'G:\inclusive\models\backbone\se_resnext50_32x4d\pretrained\best.pth'
@@ -309,5 +309,5 @@ def convert_model4():
 
 if __name__ == '__main__':
     #test()
-    #test3()
-    convert_model4()
+    test3()
+    #convert_model4()

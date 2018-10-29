@@ -69,20 +69,22 @@ class ImageDataset(data.Dataset):
         inputs = torch.zeros(num_imgs, 3, h, w)
 
         targets = []
+        obj_nums = []
         for i in range(num_imgs):
             inputs[i] = imgs[i]
             if self.label_names is not None:
-                target = self.get_label_tensor(labels[i])
+                target, obj_num = self.get_label_tensor(labels[i])
                 targets.append(target)
+                obj_nums.append(obj_num)
 
         if self.label_names is not None:
-            return inputs, torch.stack(targets)
+            return inputs, torch.stack(targets), torch.Tensor(obj_nums)
         else:
             return inputs
     def get_label_tensor(self, label_names):
         label_idx = set([self.stoi[x] for x in label_names.strip().split() if x in self.classes])
         target = [ (1 if i in label_idx else 0) for i in range(len(self.classes))]
-        return torch.FloatTensor(target)
+        return torch.FloatTensor(target), len(label_idx)
 
 def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=True):
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
@@ -91,6 +93,9 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     #sampler = BalancedSammpler(train_meta, classes, stoi, balanced=args.balanced, min_label_num=500, max_label_num=700)
     #df1 = train_meta.set_index('ImageID')
     #sampled_train_meta = df1.loc[sampler.img_ids]
+
+    train_meta = train_meta[train_meta['obj_num'] <= 10]
+    val_meta = val_meta[val_meta['obj_num'] <= 10]
 
     # resample training data
     train_img_ids = get_weighted_sample(train_meta, 1024*100)
@@ -152,8 +157,8 @@ def test_train_loader():
     args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 50})
     loader, _ = get_train_val_loaders(args, dev_mode=False, batch_size=10)
     for i, data in enumerate(loader):
-        imgs, targets = data
-        print(targets)
+        imgs, targets, obj_num = data
+        print(targets, obj_num)
         print(imgs.size(), targets.size())
         if i > 0:
             break

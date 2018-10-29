@@ -12,12 +12,28 @@ from loader import get_train_val_loaders, get_tuning_loader
 import settings
 from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_fix_threshold, find_threshold
 from models import create_model, InclusiveNet
+from utils import get_classes, get_cls_counts, get_weights_by_counts
 
-def weighted_bce(args, x, y):
+cls_weights = None
 
-    w = y*args.pos_weight + 1
+def weighted_bce(args, x, y, output_obj_num, num_target):
+    global cls_weights
 
-    return F.binary_cross_entropy_with_logits(x, y, w)
+    if cls_weights is None:
+        classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
+        cnts = get_cls_counts(classes, args.cls_type)
+        cls_weights = get_weights_by_counts(cnts, max_weight=10)
+        cls_weights = torch.Tensor(cls_weights).cuda()
+
+    w = (y*args.pos_weight + 1)#*cls_weights
+
+    bce_loss = F.binary_cross_entropy_with_logits(x, y, w)
+    #print('>>>', output_obj_num.squeeze())
+    num_preds = torch.sigmoid(output_obj_num)*10
+    #print(num_target)
+    num_loss = F.mse_loss(num_preds.squeeze(), num_target)
+
+    return bce_loss + num_loss*0.1, bce_loss.item(), num_loss.item()
 
 def train(args):
     #model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=not args.no_bk_weights)
@@ -62,12 +78,12 @@ def train(args):
 
     iteration = 0
 
-    print('epoch | itr |   lr    |   %             |  loss  |  avg   |  loss  | optim f2 |  15 f2  | 10 f2  |  best f2  |  thresh  |  time | save |')
+    print('epoch | itr |   lr    |   %             |  loss  |  avg   |  loss  | optim f2 | cls loss | num loss |  best f2  |  thresh  |  time | save |')
 
-    best_val_loss, best_val_score, th = validate(args, model, val_loader, args.batch_size, args.no_score)
+    best_val_loss, best_val_score, th, cls_loss, num_loss = validate(args, model, val_loader, args.batch_size, args.no_score)
 
-    print('val   |     |         |                 |        |        | {:.4f} | {:.4f}   |         |        |  {:.4f}   |   {:.3f} |       |'.format(
-        best_val_loss, best_val_score, best_val_score, th))
+    print('val   |     |         |                 |        |        | {:.4f} | {:.4f}   |  {:.4f}  |  {:.4f}  |  {:.4f}   |   {:.3f} |       |'.format(
+        best_val_loss, best_val_score, cls_loss, num_loss, best_val_score, th))
 
     if args.val:
         return
@@ -86,13 +102,13 @@ def train(args):
             train_loader, _ = get_train_val_loaders(args, batch_size=args.batch_size)
         for batch_idx, data in enumerate(train_loader):
             iteration += 1
-            x, target = data
-            x, target = x.cuda(), target.cuda()
+            x, target, num_target = data
+            x, target, num_target = x.cuda(), target.cuda(), num_target.cuda()
             optimizer.zero_grad()
-            output, _ = model(x)
+            output, output_obj_num = model(x)
             #loss = focal_loss(output, target)
             #loss = criterion(output, target)
-            loss = weighted_bce(args, output, target)
+            loss, _, _ = weighted_bce(args, output, target, output_obj_num, num_target)
             loss.backward()
             optimizer.step()
 
@@ -102,11 +118,11 @@ def train(args):
                     loss.item(), train_loss/(batch_idx+1)), end='')
 
             if iteration % args.iter_save == 0:
-                val_loss, val_score, th = validate(args, model, val_loader, args.batch_size, args.no_score)
+                val_loss, val_score, th, cls_loss, num_loss = validate(args, model, val_loader, args.batch_size, args.no_score)
                 model.train()
                 _save_ckp = ''
 
-                if val_score  > best_val_score :
+                if args.always_save or val_score  > best_val_score :
                     best_val_score = val_score
                     best_val_loss = val_loss
 
@@ -119,8 +135,8 @@ def train(args):
                     lr_scheduler.step()
                 current_lr = get_lrs(optimizer) 
 
-                print(' {:.4f} | {:.4f}   |         |        |  {:.4f}   |  {:.3f} | {:.1f}  | {:4s} |'.format(
-                    val_loss, val_score, best_val_score, th, (time.time() - bg) / 60, _save_ckp))
+                print(' {:.4f} | {:.4f}   |  {:.4f}  |  {:.4f}  |  {:.4f}   |  {:.3f} | {:.1f}  | {:4s} |'.format(
+                    val_loss, val_score, cls_loss, num_loss, best_val_score, th, (time.time() - bg) / 60, _save_ckp))
                 bg = time.time()
 
 def validate(args, model, val_loader, batch_size, no_score=False):
@@ -129,10 +145,11 @@ def validate(args, model, val_loader, batch_size, no_score=False):
     val_loss = 0
     targets = None
     outputs = None
+    cls_loss, num_loss = 0, 0
     with torch.no_grad():
-        for x, target in val_loader:
-            x, target = x.cuda(), target.cuda()
-            output, _ = model(x)
+        for x, target, num_target in val_loader:
+            x, target, num_target = x.cuda(), target.cuda(), num_target.cuda()
+            output, num_output = model(x)
             if targets is None:
                 targets = target
             else:
@@ -142,9 +159,11 @@ def validate(args, model, val_loader, batch_size, no_score=False):
             else:
                 outputs = torch.cat([outputs, output])    
             #loss = criterion(output, target)
-            loss = weighted_bce(args, output, target)
+            loss, _cls_loss, _num_loss = weighted_bce(args, output, target, num_output, num_target)
             #loss = focal_loss(output, target)
             val_loss += loss.item()
+            cls_loss += _cls_loss
+            num_loss += _num_loss
             
     val_loss = val_loss / (val_loader.num/batch_size)
     optimized_score = 0.
@@ -176,7 +195,8 @@ def validate(args, model, val_loader, batch_size, no_score=False):
     #print('val loss: {:.4f}, threshold f2 score: {:.4f}, threshold acc: {:.4f}'
     #    .format(val_loss, score_sum, acc_sum))
     #log.info(str(optimized_score))
-    return val_loss, optimized_score, best_th
+    n_batchs = val_loader.num//batch_size if val_loader.num % batch_size == 0 else val_loader.num//batch_size+1
+    return val_loss, optimized_score, best_th, cls_loss / n_batchs, num_loss / n_batchs
 
        
 def get_lrs(optimizer):
@@ -200,7 +220,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_bk_weights',action='store_true',help='backbone use pretrained model')
     parser.add_argument('--layers', default=34, type=int, help='batch size')
     parser.add_argument('--epochs', default=1000, type=int, help='epochs')
-    parser.add_argument('--iter_save', default=200, type=int, help='epochs')
+    parser.add_argument('--iter_save', default=100, type=int, help='epochs')
     parser.add_argument('--scratch',action='store_true', help='pretrained')
     parser.add_argument('--val',action='store_true', help='val only')
     parser.add_argument('--balanced',action='store_true', help='val only')
@@ -212,6 +232,7 @@ if __name__ == '__main__':
     parser.add_argument('--pos_weight', default=20, type=int, help='end index of classes')
     parser.add_argument('--tuning_th',action='store_true', help='val only')
     parser.add_argument('--init_ckp', default=None, type=str, help='backbone')
+    parser.add_argument('--always_save',action='store_true', help='val only')
     args = parser.parse_args()
 
     print(args)

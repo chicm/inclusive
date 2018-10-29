@@ -94,10 +94,9 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     train_meta, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
 
     # filter, keep label counts <= args.max_labels
-    train_meta['counts'] = train_meta['LabelName'].map(lambda x: len(x.split()))
-    val_meta['counts'] = val_meta['LabelName'].map(lambda x: len(x.split()))
-    train_meta = train_meta[train_meta['counts'] <= args.max_labels]
-    val_meta = val_meta[val_meta['counts'] <= args.max_labels]
+    train_meta = train_meta[train_meta['obj_num'] <= args.max_labels]
+    val_meta = val_meta[val_meta['obj_num'] <= args.max_labels]
+
     #print(val_meta['LabelName'].str.split().apply(pd.Series).stack().nunique())
     val_meta = shuffle(val_meta, random_state=1234).iloc[:5000]
 
