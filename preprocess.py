@@ -133,5 +133,5 @@ def preprocess():
 
 if __name__ == '__main__':
     #preprocess()
-    #add_counts_trainable()
+    add_counts_trainable()
     add_counts_tuning()

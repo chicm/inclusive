@@ -10,7 +10,8 @@ from metrics import find_threshold, f2_score, find_fix_threshold, f2_scores
 from utils import get_classes
 
 def create_prediction_model(args):
-    model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=False)
+    #model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=False)
+    model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
     sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
 
     if args.pretrained:
