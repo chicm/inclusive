@@ -39,11 +39,16 @@ def weighted_bce(args, x, y, output_obj_num, num_target):
 def create_model(args):
     num_classes = args.end_index - args.start_index
 
+    if args.backbone == 'resnet34':
+        ftr_num = 512
+    else:
+        ftr_num = 2048
+
     if args.load_single_class_model:
         model, _ = create_single_class_model(args)
         if num_classes != 7172:
-            model.logit = nn.Linear(2048, num_classes)
-            model.logit_num = nn.Linear(2048, 1)
+            model.logit = nn.Linear(ftr_num, num_classes)
+            model.logit_num = nn.Linear(ftr_num, 1)
     else:
         model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
     return model

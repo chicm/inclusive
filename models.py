@@ -22,9 +22,14 @@ class InclusiveNet(nn.Module):
             raise ValueError('unsupported backbone name {}'.format(backbone_name))
         #self.backbone.last_linear = nn.Linear(2048, 7272) # for model convert
 
+        if backbone_name == 'resnet34':
+            ftr_num = 512
+        else:
+            ftr_num = 2048
+
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.logit = nn.Linear(2048, num_classes)
-        self.logit_num = nn.Linear(2048, 1)
+        self.logit = nn.Linear(ftr_num, num_classes)
+        self.logit_num = nn.Linear(ftr_num, 1)
         self.name = 'InclusiveNet_' + backbone_name
     
     def logits(self, x):

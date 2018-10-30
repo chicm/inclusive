@@ -49,7 +49,7 @@ def focal_loss(x, y):
     #return F.binary_cross_entropy_with_logits(x, t, w, size_average=False)
     return F.binary_cross_entropy_with_logits(x, t, w)
 
-def criterion(args, outputs, targets, num_output, num_target):
+def criterion(args, outputs, targets, num_output, num_target, epoch=0):
     global cls_weights
 
     if cls_weights is None:
@@ -63,7 +63,12 @@ def criterion(args, outputs, targets, num_output, num_target):
     cls_loss = c(outputs, targets)
     #num_preds = torch.sigmoid(num_output)*5
     num_loss = F.mse_loss(num_output.squeeze(), num_target.float())
-    return cls_loss + num_loss*0.01, cls_loss.item(), num_loss.item()
+
+    num_weight = 1.
+    if epoch == 0:
+        num_weight = 0.1
+
+    return cls_loss + num_loss * num_weight, cls_loss.item(), num_loss.item()
     '''
     if args.focal_loss:
         return focal_loss(outputs, targets)
@@ -158,7 +163,7 @@ def train(args):
             optimizer.zero_grad()
             output, num_output = model(img)
             
-            loss, _, _ = criterion(args, output, target, num_output, num_target)
+            loss, _, _ = criterion(args, output, target, num_output, num_target, epoch)
             loss.backward()
  
             optimizer.step()
@@ -208,7 +213,7 @@ def validate(args, model, val_loader, epoch=0, threshold=0.5, cls_threshold=0.5)
         for img, target, num_target in val_loader:
             img, target, num_target = img.cuda(), target.cuda(), num_target.cuda()
             output, num_output = model(img)
-            loss, _cls_loss, _num_loss  = criterion(args, output, target, num_output, num_target)
+            loss, _cls_loss, _num_loss  = criterion(args, output, target, num_output, num_target, epoch)
             total_loss += loss.item()
             cls_loss += _cls_loss
             num_loss += _num_loss
