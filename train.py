@@ -11,7 +11,8 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLRO
 from loader import get_train_val_loaders, get_tuning_loader
 import settings
 from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_fix_threshold, find_threshold
-from models import create_model, InclusiveNet
+from models import InclusiveNet
+from train_backbone import create_single_class_model
 from utils import get_classes, get_cls_counts, get_weights_by_counts
 
 cls_weights = None
@@ -29,15 +30,30 @@ def weighted_bce(args, x, y, output_obj_num, num_target):
 
     bce_loss = F.binary_cross_entropy_with_logits(x, y, w)
     #print('>>>', output_obj_num.squeeze())
-    num_preds = torch.sigmoid(output_obj_num)*10
+    #num_preds = torch.sigmoid(output_obj_num)*10
     #print(num_target)
-    num_loss = F.mse_loss(num_preds.squeeze(), num_target)
+    num_loss = F.mse_loss(output_obj_num.squeeze(), num_target)
 
-    return bce_loss + num_loss*0.1, bce_loss.item(), num_loss.item()
+    return bce_loss + num_loss*0.01, bce_loss.item(), num_loss.item()
+
+def create_model(args):
+    num_classes = args.end_index - args.start_index
+
+    if args.load_single_class_model:
+        model, _ = create_single_class_model(args)
+        if num_classes != 7172:
+            model.logit = nn.Linear(2048, num_classes)
+            model.logit_num = nn.Linear(2048, 1)
+    else:
+        model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
+    return model
+
 
 def train(args):
     #model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=not args.no_bk_weights)
-    model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
+    #model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
+    model = create_model(args).cuda()
+
     sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
 
     if args.pretrained:
@@ -61,10 +77,15 @@ def train(args):
     model = model.cuda()
     #criterion = nn.BCEWithLogitsLoss()
 
-    if args.optim == 'Adam':
-        optimizer = optim.Adam(model.parameters(), weight_decay=0.0001, lr=args.lr)
+    if args.train_logits:
+        pg = model.get_logit_params(args.lr)
     else:
-        optimizer = optim.SGD(model.parameters(), momentum=0.9, weight_decay=0.0001, lr=args.lr)
+        pg = model.parameters()
+
+    if args.optim == 'Adam':
+        optimizer = optim.Adam(pg, weight_decay=0.0001, lr=args.lr)
+    else:
+        optimizer = optim.SGD(pg, momentum=0.9, weight_decay=0.0001, lr=args.lr)
 
     if args.lrs == 'plateau':
         lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=args.factor, patience=args.patience, min_lr=args.min_lr)
@@ -230,9 +251,11 @@ if __name__ == '__main__':
     parser.add_argument('--no_score',action='store_true', help='do not calculate f2 score')
     parser.add_argument('--pretrained',action='store_true',help='backbone use pretrained model')
     parser.add_argument('--pos_weight', default=20, type=int, help='end index of classes')
-    parser.add_argument('--tuning_th',action='store_true', help='val only')
-    parser.add_argument('--init_ckp', default=None, type=str, help='backbone')
-    parser.add_argument('--always_save',action='store_true', help='val only')
+    parser.add_argument('--tuning_th',action='store_true', help='tuning threshold')
+    parser.add_argument('--init_ckp', default=None, type=str, help='init checkpoint')
+    parser.add_argument('--always_save',action='store_true', help='alway save')
+    parser.add_argument('--load_single_class_model',action='store_true', help='load single class model')
+    parser.add_argument('--train_logits',action='store_true', help='train last layer only')
     args = parser.parse_args()
 
     print(args)

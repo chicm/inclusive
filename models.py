@@ -36,6 +36,19 @@ class InclusiveNet(nn.Module):
         x = self.backbone.features(x)
         return self.logits(x)
 
+    def get_logit_params(self, lr):
+        group1 = [self.logit, self.logit_num]
+
+        params1 = []
+        for x in group1:
+            for p in x.parameters():
+                params1.append(p)
+        
+        param_group1 = {'params': params1, 'lr': lr}
+
+        return [param_group1]
+
+
 
 def create_backbone_model(pretrained, num_classes=7272):
     if pretrained:

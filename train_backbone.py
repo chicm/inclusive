@@ -61,9 +61,9 @@ def criterion(args, outputs, targets, num_output, num_target):
     #c = nn.CrossEntropyLoss(cls_weights)
     c = nn.CrossEntropyLoss()
     cls_loss = c(outputs, targets)
-    num_preds = torch.sigmoid(num_output)*5
-    num_loss = F.mse_loss(num_preds.squeeze(), num_target.float())
-    return cls_loss + num_loss, cls_loss.item(), num_loss.item()
+    #num_preds = torch.sigmoid(num_output)*5
+    num_loss = F.mse_loss(num_output.squeeze(), num_target.float())
+    return cls_loss + num_loss*0.01, cls_loss.item(), num_loss.item()
     '''
     if args.focal_loss:
         return focal_loss(outputs, targets)
@@ -71,7 +71,7 @@ def criterion(args, outputs, targets, num_output, num_target):
         return c(outputs, targets)
     '''
 
-def accuracy(output, label, topk=(1,5)):
+def accuracy(output, label, topk=(1,10)):
     maxk = max(topk)
 
     _, pred = output.topk(maxk, 1, True, True)
@@ -84,9 +84,9 @@ def accuracy(output, label, topk=(1,5)):
         res.append(correct_k)
     return res
 
-def create_model(args, prediction=False):
+def create_single_class_model(args, num_classes=7172, prediction=False):
     #model = create_backbone_model(args.pretrained)
-    model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
+    model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=num_classes)
     if args.pretrained:
         model_file = os.path.join(MODEL_DIR, 'backbone', model.name, 'pretrained', 'best.pth')
     else:
@@ -106,12 +106,13 @@ def create_model(args, prediction=False):
         model.load_state_dict(torch.load(CKP))
     elif prediction:
         raise ValueError('model file not exist')
-    model = model.cuda()
+
     return model, model_file
 
 def train(args):
     print('start training...')
-    model, model_file = create_model(args)
+    model, model_file = create_single_class_model(args)
+    model = model.cuda()
 
     if args.optim == 'Adam':
         optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
@@ -170,7 +171,7 @@ def train(args):
                 cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate(args, model, val_loader, epoch=epoch)
                 
                 _save_ckp = ''
-                if cls_acc > best_cls_acc:
+                if args.always_save or cls_acc > best_cls_acc:
                     best_cls_acc = cls_acc
                     torch.save(model.state_dict(), model_file)
                     _save_ckp = '*'
@@ -291,6 +292,7 @@ if __name__ == '__main__':
     parser.add_argument('--predict', action='store_true')
     parser.add_argument('--sub_file', default='sub_backbone_4.csv', help='optimizer')
     parser.add_argument('--no_first_val', action='store_true')
+    parser.add_argument('--always_save',action='store_true', help='alway save')
     #parser.add_argument('--img_sz', default=256, type=int, help='image size')
     
     args = parser.parse_args()
