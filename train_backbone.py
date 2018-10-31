@@ -239,7 +239,8 @@ def create_submission(args, predictions, outfile):
     meta.to_csv(outfile, index=False)
 
 def predict(args):
-    model, _ = create_model(args, prediction=True)
+    model, _ = create_single_class_model(args, prediction=True)
+    model = model.cuda()
     model.eval()
     test_loader = get_test_loader(args, batch_size=args.batch_size, dev_mode=args.dev_mode)
 
