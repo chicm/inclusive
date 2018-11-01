@@ -24,6 +24,14 @@ class InclusiveNet(nn.Module):
 
         if backbone_name == 'resnet34':
             ftr_num = 512
+        elif backbone_name == 'densenet161':
+            ftr_num = 2208
+        elif backbone_name == 'densenet121':
+            ftr_num = 1024
+        elif backbone_name == 'densenet169':
+            ftr_num = 1664
+        elif backbone_name == 'densenet201':
+            ftr_num = 1920
         else:
             ftr_num = 2048
 

@@ -20,13 +20,16 @@ cls_weights = None
 def weighted_bce(args, x, y, output_obj_num, num_target):
     global cls_weights
 
-    if cls_weights is None:
+    if args.cls_weight > 0 and cls_weights is None:
         classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
         cnts = get_cls_counts(classes, args.cls_type)
-        cls_weights = get_weights_by_counts(cnts, max_weight=10)
+        cls_weights = get_weights_by_counts(cnts, max_weight=args.cls_weight)
         cls_weights = torch.Tensor(cls_weights).cuda()
 
-    w = (y*args.pos_weight + 1)#*cls_weights
+    w = y*args.pos_weight + 1
+
+    if args.cls_weight > 0:
+        w = w*cls_weights
 
     bce_loss = F.binary_cross_entropy_with_logits(x, y, w)
     #print('>>>', output_obj_num.squeeze())
@@ -41,6 +44,14 @@ def create_model(args):
 
     if args.backbone == 'resnet34':
         ftr_num = 512
+    elif args.backbone == 'densenet161':
+        ftr_num = 2208
+    elif args.backbone == 'densenet121':
+        ftr_num = 1024
+    elif args.backbone == 'densenet169':
+        ftr_num = 1664
+    elif args.backbone == 'densenet201':
+        ftr_num = 1920
     else:
         ftr_num = 2048
 
@@ -97,7 +108,7 @@ def train(args):
     else:
         lr_scheduler = CosineAnnealingLR(optimizer, args.t_max, eta_min=args.min_lr)
 
-    train_loader, val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
+    _, val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
     if args.tuning_th:
         val_loader = get_tuning_loader(args, batch_size=args.batch_size)
     model.train()
@@ -124,8 +135,8 @@ def train(args):
     current_lr = get_lrs(optimizer) 
     for epoch in range(args.epochs):
         train_loss = 0
-        if epoch > 0 and epoch % 4 == 0:
-            train_loader, _ = get_train_val_loaders(args, batch_size=args.batch_size)
+        train_loader, _ = get_train_val_loaders(args, batch_size=args.batch_size)
+
         for batch_idx, data in enumerate(train_loader):
             iteration += 1
             x, target, num_target = data
@@ -237,7 +248,7 @@ if __name__ == '__main__':
     parser.add_argument('--optim', choices=['Adam', 'SGD'], type=str, default='SGD', help='optimizer')
     parser.add_argument('--lrs', default='plateau', choices=['cosine', 'plateau'], help='LR sceduler')
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
-    parser.add_argument('--min_lr', default=1e-5, type=float, help='min learning rate')
+    parser.add_argument('--min_lr', default=0.0001, type=float, help='min learning rate')
     parser.add_argument('--patience', default=6, type=int, help='lr scheduler patience')
     parser.add_argument('--factor', default=0.5, type=float, help='lr scheduler factor')
     parser.add_argument('--t_max', default=12, type=int, help='lr scheduler patience')
@@ -261,6 +272,7 @@ if __name__ == '__main__':
     parser.add_argument('--always_save',action='store_true', help='alway save')
     parser.add_argument('--load_single_class_model',action='store_true', help='load single class model')
     parser.add_argument('--train_logits',action='store_true', help='train last layer only')
+    parser.add_argument('--cls_weight', default=0, type=int, help='class weights')
     args = parser.parse_args()
 
     print(args)

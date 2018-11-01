@@ -31,7 +31,7 @@ test_transforms = transforms.Compose([
         ])
 
 class ImageDataset(data.Dataset):
-    def __init__(self, train_mode, img_ids, img_dir, classes, stoi, df_class_counts=None, label_names=None):
+    def __init__(self, train_mode, img_ids, img_dir, classes, stoi, val_index=None, label_names=None):
         self.input_size = settings.IMG_SZ
         self.train_mode = train_mode
         self.img_ids = img_ids
@@ -40,8 +40,9 @@ class ImageDataset(data.Dataset):
         self.classes = classes 
         self.stoi = stoi
         self.label_names = label_names
-        if label_names is not None:
-            self.df_class_counts = df_class_counts.set_index('label_code')
+        if val_index is not None:
+            #self.df_class_counts = df_class_counts.set_index('label_code')
+            self.val_index = val_index
 
     def __getitem__(self, index):
         fn = os.path.join(self.img_dir, '{}.jpg'.format(self.img_ids[index]))
@@ -81,28 +82,21 @@ class ImageDataset(data.Dataset):
 
     def get_label(self, index):
         label_codes = [x for x in self.label_names[index].strip().split() if x in self.classes]
-        label_counts = [self.df_class_counts.loc[x]['counts'] for x in label_codes]
+        #label_counts = [self.df_class_counts.loc[x]['counts'] for x in label_codes]
         if self.train_mode:
             #random.seed(hash(self.img_ids[index]))
             return self.stoi[label_codes[int(random.random()*len(label_codes))]], len(label_codes) # random select for train
         else:
-            return self.stoi[label_codes[np.argmin(label_counts)]], len(label_codes) # select rare label as target for validation
+            return self.stoi[label_codes[self.val_index % len(label_codes)]], len(label_codes)
 
-
-def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=True):
+def get_train_loader(args, batch_size=32, dev_mode=False, train_shuffle=True):
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
-    train_meta, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
+    train_meta, _ = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
 
     # filter, keep label counts <= args.max_labels
     train_meta = train_meta[train_meta['obj_num'] <= args.max_labels]
-    val_meta = val_meta[val_meta['obj_num'] <= args.max_labels]
-
-    #print(val_meta['LabelName'].str.split().apply(pd.Series).stack().nunique())
-    val_meta = shuffle(val_meta, random_state=1234).iloc[:5000]
-
-    print(train_meta.shape, val_meta.shape)
-
-    df_class_counts = pd.read_csv(settings.SORTED_CLASSES_TRAINABLE)
+    
+    print(train_meta.shape)
 
     # resample training data
     train_img_ids = get_weighted_sample(train_meta, 1024*100)
@@ -110,20 +104,38 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
 
     if dev_mode:
         train_meta = train_meta.iloc[:10]
-        val_meta = val_meta.iloc[:10]
         train_shuffle = False
     img_dir = settings.TRAIN_IMG_DIR
     
-    train_set = ImageDataset(True, train_img_ids, img_dir, classes, stoi, df_class_counts, df_sampled['LabelName'].values.tolist())
-    val_set = ImageDataset(False, val_meta['ImageID'].values.tolist(), img_dir, classes, stoi, df_class_counts, val_meta['LabelName'].values.tolist())
-
+    train_set = ImageDataset(True, train_img_ids, img_dir, classes, stoi, None, df_sampled['LabelName'].values.tolist())
+    
     train_loader = data.DataLoader(train_set, batch_size=batch_size, shuffle=train_shuffle, num_workers=4, drop_last=True)#, collate_fn=train_set.collate_fn, drop_last=True)
     train_loader.num = train_set.num
+
+    return train_loader
+
+def get_val_loader(args, val_index, batch_size=32, dev_mode=False):
+    classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
+    _, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
+
+    # filter, keep label counts <= args.max_labels
+    val_meta = val_meta[val_meta['obj_num'] <= args.max_labels]
+    #print(val_meta.shape)
+    #print(val_meta['LabelName'].str.split().apply(pd.Series).stack().nunique())
+    val_meta = shuffle(val_meta, random_state=1234).iloc[:3000]
+
+    #print(val_meta.shape)
+
+    if dev_mode:
+        val_meta = val_meta.iloc[:10]
+    img_dir = settings.TRAIN_IMG_DIR
+    
+    val_set = ImageDataset(False, val_meta['ImageID'].values.tolist(), img_dir, classes, stoi, val_index, val_meta['LabelName'].values.tolist())
 
     val_loader = data.DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=4, drop_last=False)
     val_loader.num = val_set.num
 
-    return train_loader, val_loader
+    return val_loader
 
 def get_test_loader(args, batch_size=8, dev_mode=False):
     img_ids = get_test_ids()
@@ -142,13 +154,24 @@ def get_test_loader(args, batch_size=8, dev_mode=False):
 
 def test_train_loader():
     args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 7172, 'max_labels': 5})
-    loader, _ = get_train_val_loaders(args, dev_mode=True, batch_size=10)
+    loader = get_train_loader(args, dev_mode=True, batch_size=10)
     for i, data in enumerate(loader):
         imgs, targets, num_targets = data
         print(targets, type(targets), num_targets)
         print(imgs.size(), targets.size(), num_targets.size())
         if i > 0:
             break
+
+def test_val_loader():
+    args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 7172, 'max_labels': 3})
+    loader = get_val_loader(args, 0, dev_mode=True, batch_size=10)
+    for i, data in enumerate(loader):
+        imgs, targets, num_targets = data
+        print(targets, type(targets), num_targets)
+        print(imgs.size(), targets.size(), num_targets.size())
+        if i > 0:
+            break
+
 
 def test_test_loader():
     args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 7172, 'max_labels': 3})
@@ -163,3 +186,4 @@ def test_test_loader():
 if __name__ == '__main__':
     #test_test_loader()
     test_train_loader()
+    #test_val_loader()

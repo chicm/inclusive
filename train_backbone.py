@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, _LRSchedu
 from torchvision.models import resnet34
 import pdb
 import settings
-from backbone_loader import get_train_val_loaders, get_test_loader
+from backbone_loader import get_train_loader, get_val_loader, get_test_loader
 import cv2
 from models import create_backbone_model, InclusiveNet
 from utils import get_classes, get_cls_counts, get_weights_by_counts
@@ -52,23 +52,22 @@ def focal_loss(x, y):
 def criterion(args, outputs, targets, num_output, num_target, epoch=0):
     global cls_weights
 
-    if cls_weights is None:
+    if args.cls_weight > 0 and cls_weights is None:
         classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
         cnts = get_cls_counts(classes, args.cls_type)
-        cls_weights = get_weights_by_counts(cnts, max_weight=10)
+        cls_weights = get_weights_by_counts(cnts, max_weight=args.cls_weight)
         cls_weights = torch.Tensor(cls_weights).cuda()
+    
+    if args.cls_weight > 0:
+        c = nn.CrossEntropyLoss(cls_weights)
+    else:
+        c = nn.CrossEntropyLoss()
 
-    #c = nn.CrossEntropyLoss(cls_weights)
-    c = nn.CrossEntropyLoss()
     cls_loss = c(outputs, targets)
     #num_preds = torch.sigmoid(num_output)*5
     num_loss = F.mse_loss(num_output.squeeze(), num_target.float())
 
-    num_weight = 1.
-    if epoch == 0:
-        num_weight = 0.1
-
-    return cls_loss + num_loss * num_weight, cls_loss.item(), num_loss.item()
+    return cls_loss + num_loss * 0.01, cls_loss.item(), num_loss.item()
     '''
     if args.focal_loss:
         return focal_loss(outputs, targets)
@@ -124,8 +123,6 @@ def train(args):
     else:
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=0.0001)
 
-    train_loader, val_loader = get_train_val_loaders(args, batch_size=args.batch_size, dev_mode=args.dev_mode)
-
     if args.lrs == 'plateau':
         lr_scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=args.factor, patience=args.patience, min_lr=args.min_lr)
     else:
@@ -136,7 +133,7 @@ def train(args):
     print('epoch |   lr    |   %        |  loss  |  avg   |  loss  |  cls   |  num   |  top1   | top5   |  best  |  time |  save  |')
 
     if not args.no_first_val:
-        best_cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate(args, model, val_loader, args.start_epoch)
+        best_cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate_avg(args, model, args.start_epoch)
         print('val   |         |            |        |        | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} |      |      |'.format(
             total_loss, cls_loss, num_loss, top1_acc, best_cls_acc, best_cls_acc))
 
@@ -152,6 +149,8 @@ def train(args):
     train_iter = 0
 
     for epoch in range(args.start_epoch, args.epochs):
+        train_loader = get_train_loader(args, batch_size=args.batch_size, dev_mode=args.dev_mode)
+
         train_loss = 0
 
         current_lr = get_lrs(optimizer)  #optimizer.state_dict()['param_groups'][2]['lr']
@@ -173,7 +172,7 @@ def train(args):
                 epoch, float(current_lr[0]), args.batch_size*(batch_idx+1), train_loader.num, loss.item(), train_loss/(batch_idx+1)), end='')
 
             if train_iter > 0 and train_iter % args.iter_val == 0:
-                cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate(args, model, val_loader, epoch=epoch)
+                cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate_avg(args, model, epoch=epoch)
                 
                 _save_ckp = ''
                 if args.always_save or cls_acc > best_cls_acc:
@@ -192,7 +191,7 @@ def train(args):
                     lr_scheduler.step()
                 current_lr = get_lrs(optimizer)
 
-    del model, train_loader, val_loader, optimizer, lr_scheduler
+    #del model, optimizer, lr_scheduler
         
 def get_lrs(optimizer):
     lrs = []
@@ -200,6 +199,14 @@ def get_lrs(optimizer):
         lrs.append(pgs['lr'])
     lrs = ['{:.6f}'.format(x) for x in lrs]
     return lrs
+
+def validate_avg(args, model, epoch=0, threshold=0.5, cls_threshold=0.5):
+    val_results = []
+    for i in range(args.max_labels):
+        val_loader = get_val_loader(args, i, batch_size=args.batch_size, dev_mode=args.dev_mode)
+        val_results.append(list(validate(args, model, val_loader, epoch=epoch)))
+    res = np.mean(np.array(val_results), 0)
+    return res.tolist()
 
 def validate(args, model, val_loader, epoch=0, threshold=0.5, cls_threshold=0.5):
     #return [0]*7
@@ -299,6 +306,7 @@ if __name__ == '__main__':
     parser.add_argument('--sub_file', default='sub_backbone_4.csv', help='optimizer')
     parser.add_argument('--no_first_val', action='store_true')
     parser.add_argument('--always_save',action='store_true', help='alway save')
+    parser.add_argument('--cls_weight', default=0, type=int, help='class weights')
     #parser.add_argument('--img_sz', default=256, type=int, help='image size')
     
     args = parser.parse_args()

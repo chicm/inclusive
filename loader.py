@@ -101,8 +101,8 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     train_img_ids = get_weighted_sample(train_meta, 1024*100)
     df_sampled = train_meta.set_index('ImageID').loc[train_img_ids]
 
-    print(df_sampled.shape)
-    val_meta = val_meta.iloc[:2000]
+    #print(df_sampled.shape)
+    val_meta = val_meta.iloc[:4000]
 
     #if dev_mode:
     #    train_meta = train_meta.iloc[:10]

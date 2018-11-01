@@ -119,9 +119,9 @@ def get_weights(df, col_name, max_scale=100):
 
 def get_weighted_sample(df, sample_num):
     if random.random() < 0.5:
-        w = get_weights_by_counts(df['rare_counts'].values, max_weight=500)
+        w = get_weights_by_counts(df['rare_counts'].values, max_weight=1000)
     else:
-        w = get_weights_by_counts(df['avg_counts'].values, max_weight=500)
+        w = get_weights_by_counts(df['avg_counts'].values, max_weight=1000)
 
     return weighted_sample(df['ImageID'].values, w, sample_num)
 

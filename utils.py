@@ -42,7 +42,7 @@ def get_train_val_meta(cls_type, start_index, end_index):
 
     #print(split_index, val_end_index)
     df_val = df_labels.iloc[split_index:]
-    print(df_train.shape, df_val.shape)
+    #print(df_train.shape, df_val.shape)
 
     return df_train, df_val
 
