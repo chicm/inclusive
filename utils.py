@@ -70,7 +70,7 @@ def get_trainable_classes():
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-def get_weights_by_counts(counts, max_weight=100):
+def get_weights_by_counts_old(counts, max_weight=100):
     counts = np.sqrt(counts)
     counts = np.array(counts)
     #counts = sigmoid(counts)
@@ -88,6 +88,19 @@ def get_weights_by_counts(counts, max_weight=100):
     #print(counts)
     return counts
 
+def get_weights_by_counts(counts, max_weight=100):
+    counts = np.array(counts)
+    
+    counts = np.clip(counts, 50, 10000)
+    counts = 10000 / counts
+    
+    #print(counts.tolist()[:100])
+    #counts = ((counts * max_scale) + 1) / max_scale
+    #counts = np.sqrt(counts)
+    #print(counts)
+    return counts
+
+
 
 def test_bbox():
     df = pd.read_csv(settings.TRAIN_MACHINE_LABELS)
@@ -98,7 +111,7 @@ def test_cls_weights():
     classes, _ = get_classes('trainable', 0, 7172)
     cnts = get_cls_counts(classes, 'trainable')
     cls_weights = get_weights_by_counts(cnts, max_weight=20)
-    #print(cls_weights[:500])
+    print(cls_weights[-500:])
 
 
 if __name__ == '__main__':

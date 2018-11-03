@@ -2,7 +2,9 @@ import os
 import argparse
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import pandas as pd
+import numpy as np
 import settings
 from models import create_model, InclusiveNet
 from loader import get_test_loader, get_tuning_loader, get_train_val_loaders
@@ -25,15 +27,15 @@ def create_prediction_model(args):
     model.load_state_dict(torch.load(model_file))
     model = model.cuda()
 
-    return model
+    return model, model_file
 
-def find_best_thresholds(model, val_loader):
+def find_best_thresholds(args, model, val_loader):
     print('finding thresholds with validation data')
     model.eval()
     targets = None
     outputs = None
     with torch.no_grad():
-        for x, target in val_loader:
+        for x, target, _ in val_loader:
             x, target = x.cuda(), target.cuda()
             output,_ = model(x)
             if targets is None:
@@ -45,14 +47,24 @@ def find_best_thresholds(model, val_loader):
             else:
                 outputs = torch.cat([outputs, output])    
 
-    best_th = find_threshold(outputs, targets)
-    fix_th = find_fix_threshold(outputs, targets)
+    #best_th = find_threshold(outputs, targets)
+    
     #best_th[0] = 0.5
-    optimized_score = f2_score(targets, torch.sigmoid(outputs), threshold=torch.Tensor(best_th).cuda())
-    fix_score = f2_score(targets, torch.sigmoid(outputs), fix_th)
+    #optimized_score = f2_score(targets, torch.sigmoid(outputs), threshold=torch.Tensor(best_th).cuda())
 
-    print(f2_scores(outputs, targets))
-    return best_th, optimized_score, fix_th, fix_score
+    if args.activation == 'sigmoid':
+        preds = torch.sigmoid(outputs)
+    elif args.activation == 'softmax':
+        preds = F.softmax(outputs, dim=1)
+    else:
+        raise ValueError('error activate function')
+    
+    fix_th = find_fix_threshold(preds, targets)
+
+    fix_score = f2_score(targets, (preds>fix_th).float())
+
+    #print(f2_scores(outputs, targets))
+    return fix_th, fix_score
 
 def get_label_names(row, classes):
     assert len(row) == len(classes)
@@ -61,55 +73,68 @@ def get_label_names(row, classes):
     assert len(tmp) == len(label_names)
     return ' '.join(label_names)
 
-def model_predict(args, model, check):
+def model_predict(args, model, model_file, check, tta_num=2):
     model.eval()
-    test_loader = get_test_loader(args, batch_size=args.batch_size, dev_mode=False)
 
-    outputs = None
-    with torch.no_grad():
-        for i, x in enumerate(test_loader):
-            x = x.cuda()
-            output, _ = model(x)
-            output = torch.sigmoid(output)
+    preds = []
+    for flip_index in range(tta_num):
+        test_loader = get_test_loader(args, batch_size=args.batch_size, dev_mode=args.dev_mode, tta_index=flip_index)
 
-            if outputs is None:
-                outputs = output
-            else:
-                outputs = torch.cat([outputs, output])
-            print('{}/{}'.format(args.batch_size*(i+1), test_loader.num), end='\r')
+        outputs = None
+        with torch.no_grad():
+            for i, x in enumerate(test_loader):
+                x = x.cuda()
+                output, _ = model(x)
+                if args.activation == 'sigmoid':
+                    output = torch.sigmoid(output)
+                else:
+                    output = F.softmax(output, dim=1)
+                if outputs is None:
+                    outputs = output
+                else:
+                    outputs = torch.cat([outputs, output])
+                print('{}/{}'.format(args.batch_size*(i+1), test_loader.num), end='\r')
+                if check and i == 0:
+                    break
+        
+        preds.append(outputs.cpu().numpy())
+        #return outputs
+    results = np.mean(preds, 0)
 
-            if check and i == 0:
-                break
- 
-    return outputs
+    parent_dir = model_file+'_out'
+    if not os.path.exists(parent_dir):
+        os.makedirs(parent_dir)
+    np_file = os.path.join(parent_dir, 'pred.npy')
+    np.save(np_file, results)
+
+    return results
 
 def predict(args):
-    model = create_prediction_model(args)
+    model, model_file = create_prediction_model(args)
     
-    #_, val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
+    if args.th > 0:
+        fix_th = args.th
+    else:
+        if args.tuning_val:
+            val_loader = get_tuning_loader(args, batch_size=args.batch_size)
+        else:
+            _, val_loader = get_train_val_loaders(args, batch_size=args.batch_size, val_num=20000)
 
-    if args.tuning_th:
-        val_loader = get_tuning_loader(args, batch_size=args.batch_size)
-        opt_thresholds, tuning_f2, fix_th, fix_score = find_best_thresholds(model, val_loader)
-        print(opt_thresholds)
-        print('optimized tuning f2:', tuning_f2)
+        fix_th, fix_score = find_best_thresholds(args, model, val_loader)
         print('fixed th:', fix_th)
         print('fixed score:', fix_score)
-        th = torch.Tensor(opt_thresholds).cuda()
-    else:
-        th = args.th
-
-    print('using threshold: {}'.format(th))
+    
+    print('using threshold: {}'.format(fix_th))
 
     if args.val:
         return
     
-    outputs = model_predict(args, model, args.check)
+    outputs = model_predict(args, model, model_file, args.check, tta_num=4)
 
     classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
 
     label_names = []
-    pred = (outputs > th).byte().cpu().numpy()
+    pred = (outputs > fix_th).astype(np.uint8)
     for row in pred:
         label_names.append(get_label_names(row, classes))
 
@@ -117,10 +142,12 @@ def predict(args):
         print(label_names)
         return
 
-    create_submission(label_names, args.out_file)
+    create_submission(args, label_names, args.sub_file)
 
-def create_submission(predictions, outfile):
+def create_submission(args, predictions, outfile):
     meta = pd.read_csv(settings.STAGE_1_SAMPLE_SUBMISSION)
+    if args.dev_mode:
+        meta = meta.iloc[:len(predictions)]  # for dev mode
     meta['labels'] = predictions
     meta.to_csv(outfile, index=False)
 
@@ -142,13 +169,15 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='model name')
     parser.add_argument('--pretrained',action='store_true', help='val only')
     parser.add_argument('--check',action='store_true', help='check only')
-    parser.add_argument('--tuning_th',action='store_true', help='check only')
+    parser.add_argument('--tuning_val',action='store_true', help='check only')
     parser.add_argument('--val',action='store_true', help='check only')
-    parser.add_argument('--th', type=float, default=0.5, help='start index of classes')
+    parser.add_argument('--th', type=float, default=-1, help='threshold')
     parser.add_argument('--cls_type',  default='trainable', choices=['trainable', 'tuning'], type=str, help='class type')
     parser.add_argument('--start_index', type=int, default=0, help='start index of classes')
     parser.add_argument('--end_index', type=int, default=100, help='end index of classes')
-    parser.add_argument('--out_file', default='sub_0_100_trainable_020.csv', type=str, help='submission file name')
+    parser.add_argument('--sub_file', required=True, type=str, help='submission file name')
+    parser.add_argument('--activation', choices=['softmax', 'sigmoid'], type=str, default='softmax', help='activation')
+    parser.add_argument('--dev_mode', action='store_true')
     args = parser.parse_args()
 
     print(args)

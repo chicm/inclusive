@@ -1,6 +1,7 @@
 from sklearn import metrics
 import torch
 import numpy as np
+import torch.nn.functional as F
 
 def accuracy(logits, target):
     '''
@@ -35,17 +36,16 @@ def accuracy_th(logits, target, thresholds):
     
     return results
 
-def find_fix_threshold(logits, targets):
+def find_fix_threshold(preds, targets):
     #print('>>>', logits.size(), targets.size())
-    assert logits.size() == targets.size()
+    assert preds.size() == targets.size()
 
     best_t = 0.01
     best_score = 0.
-    outputs = torch.sigmoid(logits)
-    
-    for t in range(1, 70):
+    for t in range(1, 100):
         cur_th = t/100.
-        score = f2_score(targets, outputs, cur_th)
+        preds_t = (preds > cur_th).float()
+        score = f2_score(targets, preds_t)
         if score > best_score:
             best_score = score
             best_t = cur_th
@@ -92,18 +92,20 @@ def f2_scores(logits, target):
     preds = torch.sigmoid(logits)
     results = []
     for t in thresholds:
-        score = round(f2_score(target, preds, t).item(), 4)
+        preds_t = (preds > t).float()
+        score = round(f2_score(target, preds_t).item(), 4)
         results.append((t, score))
     return results
 
-def f2_score(y_true, y_pred, threshold=0.5):
-    return fbeta_score(y_true, y_pred, 2, threshold)
+def f2_score(y_true, y_pred):
+    return fbeta_score(y_true, y_pred, 2)
 
 
-def fbeta_score(y_true, y_pred, beta, threshold, eps=1e-9):
+def fbeta_score(y_true, y_pred, beta, eps=1e-9):
     beta2 = beta**2
 
-    y_pred = torch.ge(y_pred.float(), threshold).float()
+    #y_pred = torch.ge(y_pred.float(), threshold).float()
+    y_pred = y_pred.float()
     y_true = y_true.float()
 
     true_positive = (y_pred * y_true).sum(dim=1)

@@ -18,18 +18,29 @@ train_transforms = transforms.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
             transforms.ToTensor(),
-            # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) imagenet mean and std
             transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890]) # open images mean and std
         ])
-test_transforms = transforms.Compose([
+
+def get_tta_transform(index=0):
+    if index == 0:
+        return transforms.Compose([
             transforms.Resize((IMG_SZ,IMG_SZ)),
             transforms.ToTensor(),
             transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890])
         ])
+    elif index == 1:
+        return transforms.Compose([
+            transforms.Resize((IMG_SZ,IMG_SZ)),
+            transforms.RandomHorizontalFlip(p=2.),
+            transforms.ToTensor(),
+            transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890])
+        ])
+    else:
+        return train_transforms
 
 
 class ImageDataset(data.Dataset):
-    def __init__(self, train_mode, img_ids, img_dir, classes, stoi, label_names=None):
+    def __init__(self, train_mode, img_ids, img_dir, classes, stoi, label_names=None, tta_index=0):
         self.input_size = settings.IMG_SZ
         self.train_mode = train_mode
         self.img_ids = img_ids
@@ -38,6 +49,7 @@ class ImageDataset(data.Dataset):
         self.label_names = label_names
         self.classes = classes 
         self.stoi = stoi
+        self.tta_index = tta_index
 
     def __getitem__(self, index):
         fn = os.path.join(self.img_dir, '{}.jpg'.format(self.img_ids[index]))
@@ -48,7 +60,8 @@ class ImageDataset(data.Dataset):
         if self.train_mode:
             img = train_transforms(img)
         else:
-            img = test_transforms(img)
+            tta_transform = get_tta_transform(self.tta_index)
+            img = tta_transform(img)
 
         if self.label_names is not None:
             return img, self.label_names[index]
@@ -86,7 +99,7 @@ class ImageDataset(data.Dataset):
         target = [ (1 if i in label_idx else 0) for i in range(len(self.classes))]
         return torch.FloatTensor(target), len(label_idx)
 
-def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=True):
+def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=True, val_num=4000):
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
     train_meta, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
 
@@ -102,7 +115,8 @@ def get_train_val_loaders(args, batch_size=32, dev_mode=False, train_shuffle=Tru
     df_sampled = train_meta.set_index('ImageID').loc[train_img_ids]
 
     #print(df_sampled.shape)
-    val_meta = val_meta.iloc[:4000]
+    if val_num is not None:
+        val_meta = val_meta.iloc[:val_num]
 
     #if dev_mode:
     #    train_meta = train_meta.iloc[:10]
@@ -140,7 +154,7 @@ def get_tuning_loader(args, batch_size=32, dev_mode=False, shuffle=False):
     dloader.num = dset.num
     return dloader
 
-def get_test_loader(args, batch_size=8, dev_mode=False):
+def get_test_loader(args, batch_size=8, dev_mode=False, tta_index=0):
     img_ids = get_test_ids()
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
 
@@ -148,7 +162,7 @@ def get_test_loader(args, batch_size=8, dev_mode=False):
     if dev_mode:
         img_ids = img_ids[:10]
     
-    dset = ImageDataset(False, img_ids, img_dir, classes, stoi)
+    dset = ImageDataset(False, img_ids, img_dir, classes, stoi, tta_index=tta_index)
     dloader = data.DataLoader(dset, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=dset.collate_fn, drop_last=False)
     dloader.num = dset.num
     return dloader
@@ -183,8 +197,8 @@ def test_tuning_loader():
 
 
 if __name__ == '__main__':
-    #test_test_loader()
+    test_test_loader()
     #test_tuning_loader()
-    test_train_loader()
+    #test_train_loader()
     #small_dict, img_ids = load_small_train_ids()
     #print(img_ids[:10])

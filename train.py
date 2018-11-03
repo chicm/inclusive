@@ -12,7 +12,7 @@ from loader import get_train_val_loaders, get_tuning_loader
 import settings
 from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_fix_threshold, find_threshold
 from models import InclusiveNet
-from train_backbone import create_single_class_model
+#from train_backbone import create_single_class_model
 from utils import get_classes, get_cls_counts, get_weights_by_counts
 
 cls_weights = None
@@ -32,12 +32,11 @@ def weighted_bce(args, x, y, output_obj_num, num_target):
         w = w*cls_weights
 
     bce_loss = F.binary_cross_entropy_with_logits(x, y, w)
-    #print('>>>', output_obj_num.squeeze())
-    #num_preds = torch.sigmoid(output_obj_num)*10
-    #print(num_target)
     num_loss = F.mse_loss(output_obj_num.squeeze(), num_target)
-
     return bce_loss + num_loss*0.01, bce_loss.item(), num_loss.item()
+
+    #ce_loss = nn.CrossEntropyLoss()(x, y)
+    #return ce_loss, ce_loss.item(), 0
 
 def create_model(args):
     num_classes = args.end_index - args.start_index
@@ -55,20 +54,14 @@ def create_model(args):
     else:
         ftr_num = 2048
 
-    if args.load_single_class_model:
-        model, _ = create_single_class_model(args)
-        if num_classes != 7172:
+    if args.init_ckp is not None:
+        model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.init_num_classes)
+        model.load_state_dict(torch.load(args.init_ckp))
+        if args.init_num_classes != num_classes:
             model.logit = nn.Linear(ftr_num, num_classes)
             model.logit_num = nn.Linear(ftr_num, 1)
     else:
-        model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
-    return model
-
-
-def train(args):
-    #model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=not args.no_bk_weights)
-    #model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
-    model = create_model(args).cuda()
+        model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=num_classes)
 
     sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
 
@@ -83,14 +76,17 @@ def train(args):
 
     print('model file: {}, exist: {}'.format(model_file, os.path.exists(model_file)))
 
-    if args.init_ckp is None:
-        CKP = model_file
-    else:
-        CKP = args.init_ckp
-    if os.path.exists(CKP):
-        print('loading {}...'.format(CKP))
-        model.load_state_dict(torch.load(CKP))
+    if os.path.exists(model_file):
+        print('loading {}...'.format(model_file))
+        model.load_state_dict(torch.load(model_file))
     model = model.cuda()
+    
+    return model, model_file
+
+
+def train(args):
+    model, model_file = create_model(args)
+    
     #criterion = nn.BCEWithLogitsLoss()
 
     if args.train_logits:
@@ -206,14 +202,23 @@ def validate(args, model, val_loader, batch_size, no_score=False):
     optimized_score = 0.
     best_th = 0.
 
-    if args.tuning_th:
-        best_th = find_threshold(outputs, targets)
-        optimized_score = f2_score(targets, torch.sigmoid(outputs), torch.Tensor(best_th).cuda())
+    if args.activation == 'sigmoid':
+        preds = torch.sigmoid(outputs)
+    elif args.activation == 'softmax':
+        preds = F.softmax(outputs, dim=1)
+    else:
+        raise ValueError('error activate function')
+
+    if args.tuning_separate_th:
+        best_th = find_threshold(preds, targets)
+        preds = (preds > torch.Tensor(best_th).cuda()).float()
+        optimized_score = f2_score(targets, preds)
         #optimized_score = f2_score(targets, torch.sigmoid(outputs), best_th)
         best_th = 0.
     elif not no_score:
-        best_th = find_fix_threshold(outputs, targets)
-        optimized_score = f2_score(targets, torch.sigmoid(outputs), threshold=best_th)
+        best_th = find_fix_threshold(preds, targets)
+        preds = (preds > best_th).float()
+        optimized_score = f2_score(targets, preds)
         #optimized_score = f2_score(targets, torch.sigmoid(outputs), best_th)
     else:
         pass
@@ -263,24 +268,20 @@ if __name__ == '__main__':
     parser.add_argument('--balanced',action='store_true', help='val only')
     parser.add_argument('--cls_type', choices=['trainable', 'tuning'], type=str, default='trainable', help='train class type')
     parser.add_argument('--start_index', default=0, type=int, help='start index of classes')
-    parser.add_argument('--end_index', default=100, type=int, help='end index of classes')
+    parser.add_argument('--end_index', default=7172, type=int, help='end index of classes')
     parser.add_argument('--no_score',action='store_true', help='do not calculate f2 score')
     parser.add_argument('--pretrained',action='store_true',help='backbone use pretrained model')
     parser.add_argument('--pos_weight', default=20, type=int, help='end index of classes')
     parser.add_argument('--tuning_th',action='store_true', help='tuning threshold')
+    parser.add_argument('--tuning_separate_th',action='store_true', help='tuning threshold')
     parser.add_argument('--init_ckp', default=None, type=str, help='init checkpoint')
     parser.add_argument('--always_save',action='store_true', help='alway save')
-    parser.add_argument('--load_single_class_model',action='store_true', help='load single class model')
+    parser.add_argument('--init_num_classes', type=int, default=7172, help='init num classes')
     parser.add_argument('--train_logits',action='store_true', help='train last layer only')
     parser.add_argument('--cls_weight', default=0, type=int, help='class weights')
+    parser.add_argument('--activation', choices=['softmax', 'sigmoid'], type=str, default='softmax', help='activation')
     args = parser.parse_args()
 
     print(args)
-
-    #log.basicConfig(
-    #    filename = 'trainlog.txt', 
-    #    format   = '%(asctime)s : %(message)s',
-    #    datefmt  = '%Y-%m-%d %H:%M:%S', 
-    #    level = log.INFO)
 
     train(args)

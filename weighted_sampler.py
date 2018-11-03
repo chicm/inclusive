@@ -4,35 +4,6 @@ from collections import Counter
 import time
 from utils import get_classes, get_train_val_meta, get_weights_by_counts
 import settings
-'''
-void Resample(float* input, float* weights, float* outputs, int inputN, int outN)
-{
-    float sumWeights = 0.0f;
-    for (int i = 0; i < inputN; ++i)
-    {
-        sumWeights += weights[i];
-    }
-    
-    float sampleWidth = sumWeights / outN;
-    std::default_random_engine generator;
-    std::uniform_real_distribution<float> rnd(0, sampleWidth);
-    int outputSampleIx = -1;
-    float weightSoFar = -rnd(generator);
-    for (int i = 0; i < outN; ++i)
-    {
-        // How far is this sample from the origin (minus offset)?       
-        float sampleDist = i*sampleWidth;
-
-        // Find which sample to output. Just walk up the samples until the sum
-        // of the weights is > to the distance of the current sample
-        while (sampleDist >= weightSoFar && outputSampleIx + 1 < inputN)
-        {
-            weightSoFar += weights[++outputSampleIx];
-        }           
-        outputs[i] = input[outputSampleIx]; 
-    }
-}
-'''
 
 def weighted_sample_v1(inputs, weights, sample_num):
     sum_weights = sum(weights)

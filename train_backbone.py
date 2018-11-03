@@ -14,6 +14,8 @@ from torchvision.models import resnet34
 import pdb
 import settings
 from backbone_loader import get_train_loader, get_val_loader, get_test_loader
+from loader import get_train_val_loaders, get_tuning_loader
+import train as tr
 import cv2
 from models import create_backbone_model, InclusiveNet
 from utils import get_classes, get_cls_counts, get_weights_by_counts
@@ -89,7 +91,6 @@ def accuracy(output, label, topk=(1,10)):
     return res
 
 def create_single_class_model(args, num_classes=7172, prediction=False):
-    #model = create_backbone_model(args.pretrained)
     model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=num_classes)
     if args.pretrained:
         model_file = os.path.join(MODEL_DIR, 'backbone', model.name, 'pretrained', 'best.pth')
@@ -115,7 +116,7 @@ def create_single_class_model(args, num_classes=7172, prediction=False):
 
 def train(args):
     print('start training...')
-    model, model_file = create_single_class_model(args)
+    model, model_file = create_single_class_model(args, num_classes=args.end_index-args.start_index)
     model = model.cuda()
 
     if args.optim == 'Adam':
@@ -128,12 +129,16 @@ def train(args):
     else:
         lr_scheduler = CosineAnnealingLR(optimizer, args.t_max, eta_min=args.min_lr)
     #ExponentialLR(optimizer, 0.9, last_epoch=-1) #CosineAnnealingLR(optimizer, 15, 1e-7) 
+
+    #_, f2_val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
+    f2_val_loader = get_tuning_loader(args, batch_size=args.batch_size)
+
     best_cls_acc = 0.
 
     print('epoch |   lr    |   %        |  loss  |  avg   |  loss  |  cls   |  num   |  top1   | top5   |  best  |  time |  save  |')
 
     if not args.no_first_val:
-        best_cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate_avg(args, model, args.start_epoch)
+        best_cls_acc, top1_acc, total_loss, cls_loss, num_loss = f2_validate(args, model, f2_val_loader)#validate_avg(args, model, args.start_epoch)
         print('val   |         |            |        |        | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} |      |      |'.format(
             total_loss, cls_loss, num_loss, top1_acc, best_cls_acc, best_cls_acc))
 
@@ -172,7 +177,7 @@ def train(args):
                 epoch, float(current_lr[0]), args.batch_size*(batch_idx+1), train_loader.num, loss.item(), train_loss/(batch_idx+1)), end='')
 
             if train_iter > 0 and train_iter % args.iter_val == 0:
-                cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate_avg(args, model, epoch=epoch)
+                cls_acc, top1_acc, total_loss, cls_loss, num_loss = f2_validate(args, model, f2_val_loader)
                 
                 _save_ckp = ''
                 if args.always_save or cls_acc > best_cls_acc:
@@ -199,6 +204,11 @@ def get_lrs(optimizer):
         lrs.append(pgs['lr'])
     lrs = ['{:.6f}'.format(x) for x in lrs]
     return lrs
+
+def f2_validate(args, model, loader):
+    val_loss, val_score, th, cls_loss, num_loss = tr.validate(args, model, loader, args.batch_size, False, 'softmax')
+    print('th:', th)
+    return val_score, th, cls_loss, cls_loss, num_loss
 
 def validate_avg(args, model, epoch=0, threshold=0.5, cls_threshold=0.5):
     val_results = []
@@ -245,7 +255,7 @@ def create_submission(args, predictions, outfile):
     meta['labels'] = predictions
     meta.to_csv(outfile, index=False)
 
-def predict(args):
+def predict_top3(args):
     model, _ = create_single_class_model(args, prediction=True)
     model = model.cuda()
     model.eval()
@@ -272,6 +282,40 @@ def predict(args):
     print(preds.shape)
     for row in preds:
         label_names.append(' '.join([classes[i] for i in row]))
+    if args.dev_mode:
+        print(len(label_names))
+        print(label_names)
+
+    create_submission(args, label_names, args.sub_file)
+
+def predict_softmax(args):
+    model, _ = create_single_class_model(args, prediction=True)
+    model = model.cuda()
+    model.eval()
+    test_loader = get_test_loader(args, batch_size=args.batch_size, dev_mode=args.dev_mode)
+
+    preds = None
+    with torch.no_grad():
+        for i, x in enumerate(test_loader):
+            x = x.cuda()
+            #output = torch.sigmoid(model(x))
+            output, _ = model(x)
+            output = F.softmax(output, dim=1)
+            pred = (output > 0.03).byte()  #  use threshold
+
+            if preds is None:
+                preds = pred.cpu()
+            else:
+                preds = torch.cat([preds, pred.cpu()], 0)
+            print('{}/{}'.format(args.batch_size*(i+1), test_loader.num), end='\r')
+
+    classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
+    label_names = []
+    preds = preds.numpy()
+    print(preds.shape)
+    n_classes = 7172
+    for row in preds:
+        label_names.append(' '.join([classes[i] for i in range(n_classes) if row[i] == 1]))
     if args.dev_mode:
         print(len(label_names))
         print(label_names)
@@ -307,12 +351,14 @@ if __name__ == '__main__':
     parser.add_argument('--no_first_val', action='store_true')
     parser.add_argument('--always_save',action='store_true', help='alway save')
     parser.add_argument('--cls_weight', default=0, type=int, help='class weights')
+    parser.add_argument('--pos_weight', default=20, type=int, help='end index of classes')
+    parser.add_argument('--tuning_th',action='store_true', help='tuning threshold')
     #parser.add_argument('--img_sz', default=256, type=int, help='image size')
     
     args = parser.parse_args()
     print(args)
 
     if args.predict:
-        predict(args)
+        predict_softmax(args)
     else:
         train(args)
