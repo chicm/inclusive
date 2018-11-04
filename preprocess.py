@@ -132,6 +132,6 @@ def preprocess():
     generate_full_train_labels()
 
 if __name__ == '__main__':
-    #preprocess()
+    preprocess()
     add_counts_trainable()
     add_counts_tuning()

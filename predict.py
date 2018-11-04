@@ -12,14 +12,10 @@ from metrics import find_threshold, f2_score, find_fix_threshold, f2_scores
 from utils import get_classes
 
 def create_prediction_model(args):
-    #model = create_model(args.backbone, pretrained=args.pretrained, num_classes=args.end_index-args.start_index, load_backbone_weights=False)
-    model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.end_index - args.start_index)
+    model = InclusiveNet(backbone_name=args.backbone, num_classes=args.end_index - args.start_index)
     sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
 
-    if args.pretrained:
-        model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best_pretrained.pth')
-    else:
-        model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best_scratch.pth')
+    model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, args.ckp_name)
 
     if not os.path.exists(model_file):
         raise ValueError('model file {} does not exist'.format(model_file))
@@ -129,7 +125,7 @@ def predict(args):
     if args.val:
         return
     
-    outputs = model_predict(args, model, model_file, args.check, tta_num=4)
+    outputs = model_predict(args, model, model_file, args.check, tta_num=args.tta_num)
 
     classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
 
@@ -152,6 +148,34 @@ def create_submission(args, predictions, outfile):
     meta.to_csv(outfile, index=False)
 
 
+def ensemble_np(args):
+    if args.th < 0:
+        raise AssertionError('Please specify threshold')
+    
+    np_files = args.ensemble_np.split(',')
+    if len(np_files) < 1:
+        raise AssertionError('no np files')
+    outputs = []
+    for np_file in np_files:
+        if not os.path.exists(np_file):
+            raise AssertionError('np file does not exist')
+        output = np.load(np_file)
+        print(np_file, output.shape)
+        outputs.append(output)
+    ensemble_outputs = np.mean(outputs, 0)
+    preds = (ensemble_outputs > args.th).astype(np.uint8)
+
+    classes, _ = get_classes(args.cls_type, args.start_index, args.end_index)
+    label_names = []
+    for row in preds:
+        label_names.append(get_label_names(row, classes))
+
+    if args.check:
+        print(label_names[:10])
+        return
+
+    create_submission(args, label_names, args.sub_file)
+    
 def merge_dfs():
     df1 = pd.read_csv('sub_tuning_0_100.csv', index_col='image_id', na_filter=False)
     df1.columns = ['label1']
@@ -167,7 +191,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inclusive')
     parser.add_argument('--batch_size', default=256, type=int, help='batch size')
     parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='model name')
-    parser.add_argument('--pretrained',action='store_true', help='val only')
+    parser.add_argument('--ckp_name', type=str, default='best_pretrained.pth',help='check point file name')
     parser.add_argument('--check',action='store_true', help='check only')
     parser.add_argument('--tuning_val',action='store_true', help='check only')
     parser.add_argument('--val',action='store_true', help='check only')
@@ -178,9 +202,15 @@ if __name__ == '__main__':
     parser.add_argument('--sub_file', required=True, type=str, help='submission file name')
     parser.add_argument('--activation', choices=['softmax', 'sigmoid'], type=str, default='softmax', help='activation')
     parser.add_argument('--dev_mode', action='store_true')
+    parser.add_argument('--tta_num', type=int, default=4, help='tta number')
+    parser.add_argument('--ensemble_np', default=None, type=str, help='ensemble np files')
     args = parser.parse_args()
 
     print(args)
 
-    predict(args)
+    if args.ensemble_np is not None:
+        ensemble_np(args)
+    else:
+        predict(args)
+
     #merge_dfs()

@@ -80,20 +80,17 @@ def create_model(args):
         ftr_num = 2048
 
     if args.init_ckp is not None:
-        model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.init_num_classes)
+        model = InclusiveNet(backbone_name=args.backbone, num_classes=args.init_num_classes)
         model.load_state_dict(torch.load(args.init_ckp))
         if args.init_num_classes != num_classes:
             model.logit = nn.Linear(ftr_num, num_classes)
             model.logit_num = nn.Linear(ftr_num, 1)
     else:
-        model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=num_classes)
+        model = InclusiveNet(backbone_name=args.backbone, num_classes=num_classes)
 
     sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
 
-    if args.pretrained:
-        model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best_pretrained.pth')
-    else:
-        model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best_scratch.pth')
+    model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, args.ckp_name)
 
     parent_dir = os.path.dirname(model_file)
     if not os.path.exists(parent_dir):

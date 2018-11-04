@@ -154,5 +154,4 @@ def test_f2_2():
     print('Scores are {:.3f}'.format(fbeta_pytorch))
 
 if __name__ == '__main__':
-    print(len(best_ths))
     test_f2_2()

@@ -331,7 +331,7 @@ if __name__ == '__main__':
     parser.add_argument('--end_index', default=7172, type=int, help='end index of classes')
     parser.add_argument('--max_labels', default=3, type=int, help='filter max labels')
     parser.add_argument('--focal_loss', action='store_true')
-    parser.add_argument('--pretrained', action='store_true')
+    parser.add_argument('--ckp_name', type=str, default='best_pretrained.pth',help='check point file name')
     parser.add_argument('--predict', action='store_true')
     parser.add_argument('--sub_file', default='sub_backbone_4.csv', help='optimizer')
     parser.add_argument('--no_first_val', action='store_true')
