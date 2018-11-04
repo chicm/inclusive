@@ -191,7 +191,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inclusive')
     parser.add_argument('--batch_size', default=256, type=int, help='batch size')
     parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='model name')
-    parser.add_argument('--ckp_name', type=str, default='best_pretrained.pth',help='check point file name')
+    parser.add_argument('--ckp_name', type=str, default='best_model.pth',help='check point file name')
     parser.add_argument('--check',action='store_true', help='check only')
     parser.add_argument('--tuning_val',action='store_true', help='check only')
     parser.add_argument('--val',action='store_true', help='check only')

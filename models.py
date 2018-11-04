@@ -11,13 +11,13 @@ import settings
 
 
 class InclusiveNet(nn.Module):
-    def __init__(self, backbone_name, num_classes=7172, pretrained=True):
+    def __init__(self, backbone_name, num_classes=7172):
         super(InclusiveNet, self).__init__()
         print('num_classes:', num_classes)
         if backbone_name in ['se_resnext50_32x4d', 'se_resnet50', 'senet154', 'se_resnet152']:
             self.backbone = eval(backbone_name)()
         elif backbone_name in ['resnet34', 'resnet18', 'resnet50', 'resnet101', 'resnet152', 'densenet121', 'densenet161', 'densenet169', 'densenet201']:
-            self.backbone = eval(backbone_name)(pretrained=pretrained)
+            self.backbone = eval(backbone_name)(pretrained=False)
         else:
             raise ValueError('unsupported backbone name {}'.format(backbone_name))
         #self.backbone.last_linear = nn.Linear(2048, 7272) # for model convert

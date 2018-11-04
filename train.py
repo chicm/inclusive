@@ -233,7 +233,7 @@ if __name__ == '__main__':
     parser.add_argument('--cls_weight', default=0, type=int, help='class weights')
     parser.add_argument('--activation', choices=['softmax', 'sigmoid'], type=str, default='softmax', help='activation')
     parser.add_argument('--predict', action='store_true')
-    parser.add_argument('--ckp_name', type=str, default='best_pretrained.pth',help='check point file name')
+    parser.add_argument('--ckp_name', type=str, default='best_model.pth',help='check point file name')
     args = parser.parse_args()
 
     print(args)
