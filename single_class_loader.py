@@ -24,14 +24,25 @@ train_transforms = transforms.Compose([
             # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) imagenet mean and std
             transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890]) # open images mean and std
         ])
-test_transforms = transforms.Compose([
+def get_tta_transform(index=0):
+    if index == 0:
+        return transforms.Compose([
             transforms.Resize((IMG_SZ,IMG_SZ)),
             transforms.ToTensor(),
             transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890])
         ])
+    elif index == 1:
+        return transforms.Compose([
+            transforms.Resize((IMG_SZ,IMG_SZ)),
+            transforms.RandomHorizontalFlip(p=2.),
+            transforms.ToTensor(),
+            transforms.Normalize([0.4557, 0.4310, 0.3968], [0.2833, 0.2771, 0.2890])
+        ])
+    else:
+        return train_transforms
 
 class ImageDataset(data.Dataset):
-    def __init__(self, train_mode, img_ids, img_dir, classes, stoi, val_index=None, label_names=None):
+    def __init__(self, train_mode, img_ids, img_dir, classes, stoi, val_index=None, label_names=None, tta_index=0):
         self.input_size = settings.IMG_SZ
         self.train_mode = train_mode
         self.img_ids = img_ids
@@ -43,6 +54,7 @@ class ImageDataset(data.Dataset):
         if val_index is not None:
             #self.df_class_counts = df_class_counts.set_index('label_code')
             self.val_index = val_index
+        self.tta_index = tta_index
 
     def __getitem__(self, index):
         fn = os.path.join(self.img_dir, '{}.jpg'.format(self.img_ids[index]))
@@ -53,7 +65,8 @@ class ImageDataset(data.Dataset):
         if self.train_mode:
             img = train_transforms(img)
         else:
-            img = test_transforms(img)
+            tta_transform = get_tta_transform(self.tta_index)
+            img = tta_transform(img)
 
         if self.label_names is None:
             return img

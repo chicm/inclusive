@@ -13,11 +13,10 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, _LRSchedu
 from torchvision.models import resnet34
 import pdb
 import settings
-from backbone_loader import get_train_loader, get_val_loader, get_test_loader
-from loader import get_train_val_loaders, get_tuning_loader
-import train as tr
+from single_class_loader import get_train_loader, get_val_loader, get_test_loader
+#from loader import get_train_val_loaders, get_tuning_loader
 import cv2
-from models import create_backbone_model, InclusiveNet
+from models import InclusiveNet, create_model
 from utils import get_classes, get_cls_counts, get_weights_by_counts
 
 
@@ -90,34 +89,12 @@ def accuracy(output, label, topk=(1,10)):
         res.append(correct_k)
     return res
 
-def create_single_class_model(args, num_classes=7172, prediction=False):
-    model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=num_classes)
-    if args.pretrained:
-        model_file = os.path.join(MODEL_DIR, 'backbone', model.name, 'pretrained', 'best.pth')
-    else:
-        model_file = os.path.join(MODEL_DIR, 'backbone', model.name, 'scratch', 'best.pth')
-
-    parent_dir = os.path.dirname(model_file)
-    if not os.path.exists(parent_dir):
-        os.makedirs(parent_dir)
-
-    if args.init_ckp is not None:
-        CKP = args.init_ckp
-    else:
-        CKP = model_file
-    print('{}, exist: {}'.format(CKP, os.path.exists(CKP)))
-    if os.path.exists(CKP):
-        print('loading {}...'.format(CKP))
-        model.load_state_dict(torch.load(CKP))
-    elif prediction:
-        raise ValueError('model file not exist')
-
-    return model, model_file
 
 def train(args):
     print('start training...')
-    model, model_file = create_single_class_model(args, num_classes=args.end_index-args.start_index)
-    model = model.cuda()
+    #model, model_file = create_single_class_model(args, num_classes=args.end_index-args.start_index)
+    model, model_file = create_model(args)
+    #model = model.cuda()
 
     if args.optim == 'Adam':
         optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.0001)
@@ -131,14 +108,16 @@ def train(args):
     #ExponentialLR(optimizer, 0.9, last_epoch=-1) #CosineAnnealingLR(optimizer, 15, 1e-7) 
 
     #_, f2_val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
-    f2_val_loader = get_tuning_loader(args, batch_size=args.batch_size)
+    #f2_val_loader = get_tuning_loader(args, batch_size=args.batch_size)
+    #val_loader = get_val_loader(args, 0)
 
     best_cls_acc = 0.
 
-    print('epoch |   lr    |   %        |  loss  |  avg   |  loss  |  cls   |  num   |  top1   | top5   |  best  |  time |  save  |')
+    print('epoch |   lr    |   %        |  loss  |  avg   |  loss  |  cls   |  num   |  top1   | top10  |  best  |  time |  save  |')
 
     if not args.no_first_val:
-        best_cls_acc, top1_acc, total_loss, cls_loss, num_loss = f2_validate(args, model, f2_val_loader)#validate_avg(args, model, args.start_epoch)
+        #best_cls_acc, top1_acc, total_loss, cls_loss, num_loss = f2_validate(args, model, f2_val_loader)#validate_avg(args, model, args.start_epoch)
+        best_cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate_avg(args, model, args.start_epoch)
         print('val   |         |            |        |        | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} |      |      |'.format(
             total_loss, cls_loss, num_loss, top1_acc, best_cls_acc, best_cls_acc))
 
@@ -177,7 +156,8 @@ def train(args):
                 epoch, float(current_lr[0]), args.batch_size*(batch_idx+1), train_loader.num, loss.item(), train_loss/(batch_idx+1)), end='')
 
             if train_iter > 0 and train_iter % args.iter_val == 0:
-                cls_acc, top1_acc, total_loss, cls_loss, num_loss = f2_validate(args, model, f2_val_loader)
+                #cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate(args, model, f2_val_loader)
+                cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate_avg(args, model)
                 
                 _save_ckp = ''
                 if args.always_save or cls_acc > best_cls_acc:
@@ -212,7 +192,7 @@ def f2_validate(args, model, loader):
 
 def validate_avg(args, model, epoch=0, threshold=0.5, cls_threshold=0.5):
     val_results = []
-    for i in range(args.max_labels):
+    for i in [0,2]:
         val_loader = get_val_loader(args, i, batch_size=args.batch_size, dev_mode=args.dev_mode)
         val_results.append(list(validate(args, model, val_loader, epoch=epoch)))
     res = np.mean(np.array(val_results), 0)
@@ -256,7 +236,7 @@ def create_submission(args, predictions, outfile):
     meta.to_csv(outfile, index=False)
 
 def predict_top3(args):
-    model, _ = create_single_class_model(args, prediction=True)
+    model, _ = create_model(args)
     model = model.cuda()
     model.eval()
     test_loader = get_test_loader(args, batch_size=args.batch_size, dev_mode=args.dev_mode)
@@ -289,7 +269,7 @@ def predict_top3(args):
     create_submission(args, label_names, args.sub_file)
 
 def predict_softmax(args):
-    model, _ = create_single_class_model(args, prediction=True)
+    model, _ = create_model(args)
     model = model.cuda()
     model.eval()
     test_loader = get_test_loader(args, batch_size=args.batch_size, dev_mode=args.dev_mode)
@@ -328,7 +308,7 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', default='se_resnext50_32x4d', type=str, help='backbone')
     parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
     parser.add_argument('--min_lr', default=0.0001, type=float, help='min learning rate')
-    parser.add_argument('--batch_size', default=64, type=int, help='batch_size')
+    parser.add_argument('--batch_size', default=48, type=int, help='batch_size')
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
     parser.add_argument('--iter_val', default=100, type=int, help='start epoch')
     parser.add_argument('--epochs', default=200, type=int, help='epoch')
@@ -338,6 +318,7 @@ if __name__ == '__main__':
     parser.add_argument('--factor', default=0.5, type=float, help='lr scheduler factor')
     parser.add_argument('--t_max', default=12, type=int, help='lr scheduler patience')
     parser.add_argument('--init_ckp', default=None, type=str, help='resume from checkpoint path')
+    parser.add_argument('--init_num_classes', type=int, default=7172, help='init num classes')
     parser.add_argument('--val', action='store_true')
     parser.add_argument('--dev_mode', action='store_true')
     parser.add_argument('--cls_type', choices=['trainable', 'tuning'], type=str, default='trainable', help='train class type')
@@ -353,6 +334,7 @@ if __name__ == '__main__':
     parser.add_argument('--cls_weight', default=0, type=int, help='class weights')
     parser.add_argument('--pos_weight', default=20, type=int, help='end index of classes')
     parser.add_argument('--tuning_th',action='store_true', help='tuning threshold')
+    parser.add_argument('--activation', choices=['softmax', 'sigmoid'], type=str, default='softmax', help='activation')
     #parser.add_argument('--img_sz', default=256, type=int, help='image size')
     
     args = parser.parse_args()

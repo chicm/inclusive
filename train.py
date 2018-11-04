@@ -11,7 +11,7 @@ from torch.optim.lr_scheduler import ExponentialLR, CosineAnnealingLR, ReduceLRO
 from loader import get_train_val_loaders, get_tuning_loader
 import settings
 from metrics import accuracy, f2_scores, f2_score, accuracy_th, find_fix_threshold, find_threshold
-from models import InclusiveNet
+from models import InclusiveNet, create_model
 #from train_backbone import create_single_class_model
 from utils import get_classes, get_cls_counts, get_weights_by_counts
 
@@ -37,51 +37,6 @@ def weighted_bce(args, x, y, output_obj_num, num_target):
 
     #ce_loss = nn.CrossEntropyLoss()(x, y)
     #return ce_loss, ce_loss.item(), 0
-
-def create_model(args):
-    num_classes = args.end_index - args.start_index
-
-    if args.backbone == 'resnet34':
-        ftr_num = 512
-    elif args.backbone == 'densenet161':
-        ftr_num = 2208
-    elif args.backbone == 'densenet121':
-        ftr_num = 1024
-    elif args.backbone == 'densenet169':
-        ftr_num = 1664
-    elif args.backbone == 'densenet201':
-        ftr_num = 1920
-    else:
-        ftr_num = 2048
-
-    if args.init_ckp is not None:
-        model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=args.init_num_classes)
-        model.load_state_dict(torch.load(args.init_ckp))
-        if args.init_num_classes != num_classes:
-            model.logit = nn.Linear(ftr_num, num_classes)
-            model.logit_num = nn.Linear(ftr_num, 1)
-    else:
-        model = InclusiveNet(backbone_name=args.backbone, pretrained=args.pretrained, num_classes=num_classes)
-
-    sub_dir = '{}_{}_{}'.format(args.cls_type, args.start_index, args.end_index)
-
-    if args.pretrained:
-        model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best_pretrained.pth')
-    else:
-        model_file = os.path.join(settings.MODEL_DIR, model.name, sub_dir, 'best_scratch.pth')
-
-    parent_dir = os.path.dirname(model_file)
-    if not os.path.exists(parent_dir):
-        os.makedirs(parent_dir)
-
-    print('model file: {}, exist: {}'.format(model_file, os.path.exists(model_file)))
-
-    if os.path.exists(model_file):
-        print('loading {}...'.format(model_file))
-        model.load_state_dict(torch.load(model_file))
-    model = model.cuda()
-    
-    return model, model_file
 
 
 def train(args):
@@ -280,6 +235,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_logits',action='store_true', help='train last layer only')
     parser.add_argument('--cls_weight', default=0, type=int, help='class weights')
     parser.add_argument('--activation', choices=['softmax', 'sigmoid'], type=str, default='softmax', help='activation')
+    parser.add_argument('--predict', action='store_true')
     args = parser.parse_args()
 
     print(args)

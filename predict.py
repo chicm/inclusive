@@ -174,7 +174,7 @@ if __name__ == '__main__':
     parser.add_argument('--th', type=float, default=-1, help='threshold')
     parser.add_argument('--cls_type',  default='trainable', choices=['trainable', 'tuning'], type=str, help='class type')
     parser.add_argument('--start_index', type=int, default=0, help='start index of classes')
-    parser.add_argument('--end_index', type=int, default=100, help='end index of classes')
+    parser.add_argument('--end_index', type=int, default=7172, help='end index of classes')
     parser.add_argument('--sub_file', required=True, type=str, help='submission file name')
     parser.add_argument('--activation', choices=['softmax', 'sigmoid'], type=str, default='softmax', help='activation')
     parser.add_argument('--dev_mode', action='store_true')
