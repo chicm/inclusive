@@ -110,6 +110,12 @@ def get_train_loader(args, batch_size=32, dev_mode=False, train_shuffle=True):
     train_meta = train_meta[train_meta['obj_num'] <= args.max_labels]
     
     print(train_meta.shape)
+    if len(classes) < 7172:
+        classes_set = set(classes)
+        train_meta['tmp_label_count'] = train_meta['LabelName'].map(lambda x: len(set(x.split()) & classes_set))
+        train_meta = train_meta[train_meta['tmp_label_count'] > 0]
+        #tuning_labels['LabelName'].map(lambda x: sum([cls_counts[c] for c in x.split()]))
+        #print('>>', train_meta.shape)
 
     # resample training data
     train_img_ids = get_weighted_sample(train_meta, 1024*100)
@@ -127,15 +133,21 @@ def get_train_loader(args, batch_size=32, dev_mode=False, train_shuffle=True):
 
     return train_loader
 
-def get_val_loader(args, val_index, batch_size=32, dev_mode=False):
+def get_val_loader(args, val_index, batch_size=32, dev_mode=False, val_num=3000):
     classes, stoi = get_classes(args.cls_type, args.start_index, args.end_index)
     _, val_meta = get_train_val_meta(args.cls_type, args.start_index, args.end_index)
 
     # filter, keep label counts <= args.max_labels
     val_meta = val_meta[val_meta['obj_num'] <= args.max_labels]
+
+    if len(classes) < 7172:
+        classes_set = set(classes)
+        val_meta['tmp_label_count'] = val_meta['LabelName'].map(lambda x: len(set(x.split()) & classes_set))
+        val_meta = val_meta[val_meta['tmp_label_count'] > 0]
+
     #print(val_meta.shape)
     #print(val_meta['LabelName'].str.split().apply(pd.Series).stack().nunique())
-    val_meta = shuffle(val_meta, random_state=1234).iloc[:3000]
+    val_meta = shuffle(val_meta, random_state=1234).iloc[:val_num]
 
     #print(val_meta.shape)
 
@@ -166,7 +178,7 @@ def get_test_loader(args, batch_size=8, dev_mode=False):
     return dloader
 
 def test_train_loader():
-    args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 7172, 'max_labels': 5})
+    args = AttrDict({'cls_type': 'trainable', 'start_index': 0, 'end_index': 1000, 'max_labels': 5})
     loader = get_train_loader(args, dev_mode=True, batch_size=10)
     for i, data in enumerate(loader):
         imgs, targets, num_targets = data

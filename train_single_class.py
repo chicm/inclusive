@@ -14,7 +14,8 @@ from torchvision.models import resnet34
 import pdb
 import settings
 from single_class_loader import get_train_loader, get_val_loader, get_test_loader
-#from loader import get_train_val_loaders, get_tuning_loader
+from loader import get_train_val_loaders, get_tuning_loader
+import train as tr
 import cv2
 from models import InclusiveNet, create_model
 from utils import get_classes, get_cls_counts, get_weights_by_counts
@@ -107,19 +108,21 @@ def train(args):
         lr_scheduler = CosineAnnealingLR(optimizer, args.t_max, eta_min=args.min_lr)
     #ExponentialLR(optimizer, 0.9, last_epoch=-1) #CosineAnnealingLR(optimizer, 15, 1e-7) 
 
-    #_, f2_val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
-    #f2_val_loader = get_tuning_loader(args, batch_size=args.batch_size)
+    _, f2_val_loader = get_train_val_loaders(args, batch_size=args.batch_size)
+    tuning_loader = get_tuning_loader(args, batch_size=args.batch_size)
     #val_loader = get_val_loader(args, 0)
 
     best_cls_acc = 0.
 
-    print('epoch |   lr    |   %        |  loss  |  avg   |  loss  |  cls   |  num   |  top1   | top10  |  best  |  time |  save  |')
+    print('epoch |   lr    |   %        |  loss  |  avg   |  loss  |  cls   |  num   |  top1  | top10  |  best  |   f2   |  t f2  | time |  save  |')
 
     if not args.no_first_val:
         #best_cls_acc, top1_acc, total_loss, cls_loss, num_loss = f2_validate(args, model, f2_val_loader)#validate_avg(args, model, args.start_epoch)
         best_cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate_avg(args, model, args.start_epoch)
-        print('val   |         |            |        |        | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} |      |      |'.format(
-            total_loss, cls_loss, num_loss, top1_acc, best_cls_acc, best_cls_acc))
+        _, f2, _, _, _ = tr.validate(args, model, f2_val_loader, args.batch_size)
+        _, tuning_f2, _, _, _ = tr.validate(args, model, tuning_loader, args.batch_size)
+        print('val   |         |            |        |        | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} |      |      |'.format(
+            total_loss, cls_loss, num_loss, top1_acc, best_cls_acc, best_cls_acc, f2, tuning_f2))
 
     if args.val:
         return
@@ -158,14 +161,16 @@ def train(args):
             if train_iter > 0 and train_iter % args.iter_val == 0:
                 #cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate(args, model, f2_val_loader)
                 cls_acc, top1_acc, total_loss, cls_loss, num_loss = validate_avg(args, model)
+                _, f2, _, _, _ = tr.validate(args, model, f2_val_loader, args.batch_size)
+                _, tuning_f2, _, _, _ = tr.validate(args, model, tuning_loader, args.batch_size)
                 
                 _save_ckp = ''
                 if args.always_save or cls_acc > best_cls_acc:
                     best_cls_acc = cls_acc
                     torch.save(model.state_dict(), model_file)
                     _save_ckp = '*'
-                print('  {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.2f} |  {:4s} |'.format(
-            total_loss, cls_loss, num_loss, top1_acc, cls_acc, best_cls_acc, (time.time() - bg) / 60, _save_ckp))
+                print('  {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.4f} | {:.2f} |  {:4s} |'.format(
+            total_loss, cls_loss, num_loss, top1_acc, cls_acc, best_cls_acc, f2, tuning_f2, (time.time() - bg) / 60, _save_ckp))
 
 
                 model.train()
@@ -193,7 +198,7 @@ def f2_validate(args, model, loader):
 def validate_avg(args, model, epoch=0, threshold=0.5, cls_threshold=0.5):
     val_results = []
     for i in [0,2]:
-        val_loader = get_val_loader(args, i, batch_size=args.batch_size, dev_mode=args.dev_mode)
+        val_loader = get_val_loader(args, i, batch_size=args.batch_size, dev_mode=args.dev_mode, val_num=args.val_num)
         val_results.append(list(validate(args, model, val_loader, epoch=epoch)))
     res = np.mean(np.array(val_results), 0)
     return res.tolist()
@@ -334,7 +339,9 @@ if __name__ == '__main__':
     parser.add_argument('--cls_weight', default=0, type=int, help='class weights')
     parser.add_argument('--pos_weight', default=20, type=int, help='end index of classes')
     parser.add_argument('--tuning_th',action='store_true', help='tuning threshold')
+    parser.add_argument('--tuning_separate_th',action='store_true', help='tuning threshold')
     parser.add_argument('--activation', choices=['softmax', 'sigmoid'], type=str, default='softmax', help='activation')
+    parser.add_argument('--val_num', default=3000, type=int, help='number of val data')
     #parser.add_argument('--img_sz', default=256, type=int, help='image size')
     
     args = parser.parse_args()
