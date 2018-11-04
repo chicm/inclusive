@@ -1,4 +1,4 @@
-import os, cv2, glob
+import os, glob
 import numpy as np
 import torch
 import torch.utils.data as data
@@ -53,7 +53,6 @@ class ImageDataset(data.Dataset):
 
     def __getitem__(self, index):
         fn = os.path.join(self.img_dir, '{}.jpg'.format(self.img_ids[index]))
-        #img = cv2.imread(fn)
         img = Image.open(fn, 'r')
         img = img.convert('RGB')
         

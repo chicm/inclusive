@@ -16,7 +16,6 @@ import settings
 from single_class_loader import get_train_loader, get_val_loader, get_test_loader
 from loader import get_train_val_loaders, get_tuning_loader
 import train as tr
-import cv2
 from models import InclusiveNet, create_model
 from utils import get_classes, get_cls_counts, get_weights_by_counts
 
